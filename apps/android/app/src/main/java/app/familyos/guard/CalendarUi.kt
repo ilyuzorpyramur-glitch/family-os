@@ -193,9 +193,22 @@ fun AddEventDialog(
     geofences: List<GeofenceStatus>,
     busy: Boolean,
     onDismiss: () -> Unit,
-    onSubmit: (title: String, geofenceId: String?, date: String, start: String, minutes: Int) -> Unit,
+    onSubmit: (
+        title: String,
+        description: String,
+        geofenceId: String?,
+        date: String,
+        start: String,
+        minutes: Int,
+        lat: Double?,
+        lng: Double?,
+    ) -> Unit,
 ) {
     var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var mapLat by remember { mutableStateOf<Double?>(null) }
+    var mapLng by remember { mutableStateOf<Double?>(null) }
+    var showMap by remember { mutableStateOf(false) }
     var date by remember { mutableStateOf(defaultDate) }
     var time by remember { mutableStateOf("16:00") }
     var minutes by remember { mutableStateOf("60") }
@@ -209,8 +222,14 @@ fun AddEventDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Куда и зачем") },
+                    label = { Text("Название события") },
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Что будешь делать") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
@@ -236,8 +255,20 @@ fun AddEventDialog(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { showMap = true }) { Text("Указать на карте") }
+                    if (mapLat != null && mapLng != null) {
+                        Text(
+                            "%.4f, %.4f".format(mapLat, mapLng),
+                            color = CalAccent,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 14.dp),
+                        )
+                    }
+                }
+
                 if (geofences.isNotEmpty()) {
-                    Text("Место", color = CalMuted, fontSize = 12.sp)
+                    Text("Места родителя", color = CalMuted, fontSize = 12.sp)
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         geofences.forEach { fence ->
                             val active = placeId == fence.id
@@ -268,7 +299,7 @@ fun AddEventDialog(
                 onClick = {
                     val dur = minutes.toIntOrNull()?.coerceIn(15, 720) ?: 60
                     if (title.isNotBlank() && date.length == 10) {
-                        onSubmit(title.trim(), placeId, date, time, dur)
+                        onSubmit(title.trim(), description.trim(), placeId, date, time, dur, mapLat, mapLng)
                     }
                 },
                 enabled = !busy && title.isNotBlank(),
@@ -276,4 +307,17 @@ fun AddEventDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
+
+    if (showMap) {
+        MapPickerDialog(
+            initialLat = mapLat ?: 55.751244,
+            initialLng = mapLng ?: 37.618423,
+            onDismiss = { showMap = false },
+            onPick = { lat, lng ->
+                mapLat = lat
+                mapLng = lng
+                placeId = null
+            },
+        )
+    }
 }

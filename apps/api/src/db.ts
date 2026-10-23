@@ -349,6 +349,9 @@ export function openDb(file: string): DB {
   addColumn(db, "devices", "last_lng", "last_lng REAL");
   addColumn(db, "devices", "last_location_at", "last_location_at TEXT");
   addColumn(db, "quests", "shared", "shared INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "events", "description", "description TEXT");
+  addColumn(db, "events", "lat", "lat REAL");
+  addColumn(db, "events", "lng", "lng REAL");
   return db;
 }
 

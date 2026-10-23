@@ -6,6 +6,7 @@ import formbody from "@fastify/formbody";
 import type { Config } from "./config.js";
 import type { DB } from "./db.js";
 import { seedCategories } from "./repo/categories.js";
+import { seedDefaultMoney } from "./repo/money-seed.js";
 import { registerApi } from "./routes/api.js";
 import { registerGuardApi } from "./routes/guard.js";
 import { registerQuestApi } from "./routes/quest.js";
@@ -30,6 +31,7 @@ export async function buildApp({ config, db, logger = false }: AppOptions): Prom
   await app.register(formbody);
 
   seedCategories(db);
+  seedDefaultMoney(db, config.baseCurrency);
 
   app.get("/uploads/:name", async (request, reply) => {
     const { name } = request.params as { name: string };

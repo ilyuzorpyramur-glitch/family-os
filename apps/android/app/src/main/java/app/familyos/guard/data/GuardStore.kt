@@ -19,6 +19,10 @@ class GuardStore(context: Context) {
         get() = prefs.getString(KEY_POLICY, null)
         set(value) = prefs.edit().putString(KEY_POLICY, value).apply()
 
+    var parentToken: String
+        get() = prefs.getString(KEY_PARENT_TOKEN, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_PARENT_TOKEN, value.trim()).apply()
+
     val isConfigured: Boolean
         get() = serverUrl.isNotBlank() && token.isNotBlank()
 
@@ -47,6 +51,7 @@ class GuardStore(context: Context) {
         private const val KEY_TOKEN = "device_token"
         private const val KEY_POLICY = "policy_json"
         private const val KEY_POLICY_AT = "policy_at"
+        private const val KEY_PARENT_TOKEN = "parent_token"
     }
 }
 

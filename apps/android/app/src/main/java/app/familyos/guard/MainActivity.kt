@@ -62,6 +62,9 @@ import androidx.lifecycle.lifecycleScope
 import app.familyos.guard.admin.GuardDeviceAdmin
 import app.familyos.guard.api.ApiClient
 import app.familyos.guard.data.GuardStore
+import app.familyos.guard.data.OfflineStore
+import android.content.ClipData
+import android.content.ClipboardManager
 import app.familyos.guard.data.Policy
 import app.familyos.guard.data.CalendarData
 import app.familyos.guard.data.HomeData
@@ -87,6 +90,7 @@ private data class UiState(
 class MainActivity : ComponentActivity() {
 
     private lateinit var store: GuardStore
+    private lateinit var offline: OfflineStore
     private var state by mutableStateOf(UiState())
     private var busy by mutableStateOf(false)
     private var message by mutableStateOf<String?>(null)
@@ -137,6 +141,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = GuardStore(this)
+        offline = OfflineStore(this)
         GuardNotifications.ensureChannel(this)
 
         val extraUrl = intent?.getStringExtra("server_url")
@@ -180,8 +185,8 @@ class MainActivity : ComponentActivity() {
                                         onRefresh = { refresh() },
                                         onOpenProfile = { tab = 4 },
                                         calendar = calendar,
-                                        onAddEvent = { title, geofenceId, date, start, minutes ->
-                                            addEvent(title, geofenceId, date, start, minutes)
+                                        onAddEvent = { title, description, geofenceId, date, start, minutes, lat, lng ->
+                                            addEvent(title, description, geofenceId, date, start, minutes, lat, lng)
                                         },
                                     )
                                     1 -> QuestsScreen(
@@ -290,16 +295,22 @@ class MainActivity : ComponentActivity() {
             runCatching { api.refreshPolicy() }
                 .onSuccess { state = state.copy(policy = it) }
                 .onFailure { message = it.message }
-            runCatching { api.quests() }.onSuccess { quests = it }
+            runCatching { api.quests() }.onSuccess {
+                quests = it
+                offline.cache("quests", org.json.JSONObject().put("data", org.json.JSONObject()).toString())
+            }
             runCatching { api.shop() }.onSuccess { shop = it }
             runCatching { api.home() }.onSuccess { next ->
                 val previous = lastLevel
                 if (previous != null && next.level > previous) levelUpLevel = next.level
                 lastLevel = next.level
                 home = next
+            }.onFailure {
+                message = "Нет связи с сервером — показаны последние данные"
             }
             runCatching { api.profile() }.onSuccess { profile = it }
             runCatching { api.calendar(YearMonth.now().toString()) }.onSuccess { calendar = it }
+            flushOutbox(api)
             busy = false
             startTracking()
         }
@@ -347,15 +358,53 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun addEvent(title: String, geofenceId: String?, date: String, start: String, minutes: Int) {
+    private fun flushOutbox(api: ApiClient) {
+        val pending = offline.pending()
+        if (pending.isEmpty()) return
+        lifecycleScope.launch {
+            for (item in pending) {
+                val ok = runCatching {
+                    api.rawCall(item.optString("method", "POST"), item.optString("path"), item.optString("body"))
+                }.isSuccess
+                if (ok) offline.remove(item) else break
+            }
+        }
+    }
+
+    private fun addEvent(
+        title: String,
+        description: String,
+        geofenceId: String?,
+        date: String,
+        start: String,
+        minutes: Int,
+        lat: Double?,
+        lng: Double?,
+    ) {
         lifecycleScope.launch {
             busy = true
             val api = ApiClient(store)
             runCatching {
-                api.createEvent(title, geofenceId, date, start, minutes)
+                api.createEvent(title, description, geofenceId, date, start, minutes, lat, lng)
                 calendar = api.calendar(YearMonth.now().toString())
             }.onSuccess { message = "Событие отправлено родителю" }
-                .onFailure { message = it.message }
+                .onFailure {
+                    if (offline != null) {
+                        offline!!.enqueue(
+                            "event",
+                            "/api/device/child-events",
+                            org.json.JSONObject()
+                                .put("title", title)
+                                .put("description", description)
+                                .put("date", date)
+                                .put("startTime", start)
+                                .put("durationMin", minutes),
+                        )
+                        message = "Нет связи — событие отправится позже"
+                    } else {
+                        message = it.message
+                    }
+                }
             busy = false
         }
     }
@@ -707,6 +756,33 @@ private fun Dashboard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp,
                 )
+                if (!state.deviceOwner) {
+                    Text(
+                        "Команда для ПК (телефон без аккаунтов):",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                    )
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F151D))) {
+                        Text(
+                            "adb shell dpm set-device-owner app.familyos.guard/.admin.GuardDeviceAdmin",
+                            Modifier.padding(10.dp),
+                            fontSize = 10.sp,
+                            color = Color(0xFF9AE6B4),
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            val clipboard = getSystemService(ClipboardManager::class.java)
+                            clipboard.setPrimaryClip(
+                                ClipData.newPlainText(
+                                    "device owner",
+                                    "adb shell dpm set-device-owner app.familyos.guard/.admin.GuardDeviceAdmin",
+                                ),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Скопировать команду") }
+                }
             }
         }
 

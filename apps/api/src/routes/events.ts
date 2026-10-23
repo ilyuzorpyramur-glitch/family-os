@@ -53,7 +53,10 @@ export function registerEventsApi(app: FastifyInstance, ctx: Ctx): void {
     const body = z
       .object({
         title: z.string().min(1).max(120),
+        description: z.string().max(500).optional(),
         geofenceId: z.string().nullable().optional(),
+        lat: z.number().min(-90).max(90).optional(),
+        lng: z.number().min(-180).max(180).optional(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         startTime: z.string().regex(/^\d{2}:\d{2}$/),
         durationMin: z.number().int().min(15).max(720).optional(),
@@ -71,6 +74,9 @@ export function registerEventsApi(app: FastifyInstance, ctx: Ctx): void {
       startTime: body.data.startTime,
       durationMin: body.data.durationMin,
       note: body.data.note ?? null,
+      description: body.data.description ?? null,
+      lat: body.data.lat ?? null,
+      lng: body.data.lng ?? null,
       createdBy: "child",
     });
     return { ok: true, data: event };
@@ -115,15 +121,17 @@ export function registerEventsApi(app: FastifyInstance, ctx: Ctx): void {
         startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
         durationMin: z.number().int().min(15).max(720).optional(),
         title: z.string().min(1).max(120).optional(),
+        description: z.string().max(500).nullable().optional(),
       })
       .safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
     }
-    db.prepare("UPDATE events SET start_time = ?, duration_min = ?, title = ? WHERE id = ?").run(
+    db.prepare("UPDATE events SET start_time = ?, duration_min = ?, title = ?, description = ? WHERE id = ?").run(
       body.data.startTime ?? event.start_time,
       body.data.durationMin ?? event.duration_min,
       body.data.title ?? event.title,
+      body.data.description === undefined ? event.description : body.data.description,
       id,
     );
     return { ok: true, data: getEvent(db, id) };

@@ -97,9 +97,24 @@ class ApiClient(private val store: GuardStore) {
         CalendarData.fromJson(call("GET", "/api/device/calendar?month=$month", null))
     }
 
-    suspend fun createEvent(title: String, geofenceId: String?, date: String, startTime: String, durationMin: Int) = withContext(Dispatchers.IO) {
-        val body = JSONObject().put("title", title).put("date", date).put("startTime", startTime).put("durationMin", durationMin)
+    suspend fun createEvent(
+        title: String,
+        description: String,
+        geofenceId: String?,
+        date: String,
+        startTime: String,
+        durationMin: Int,
+        lat: Double? = null,
+        lng: Double? = null,
+    ) = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("title", title)
+            .put("date", date)
+            .put("startTime", startTime)
+            .put("durationMin", durationMin)
+        if (description.isNotBlank()) body.put("description", description)
         if (geofenceId != null) body.put("geofenceId", geofenceId)
+        if (lat != null && lng != null) body.put("lat", lat).put("lng", lng)
         call("POST", "/api/device/child-events", body)
         Unit
     }
@@ -149,6 +164,11 @@ class ApiClient(private val store: GuardStore) {
         if (payload != null) body.put("payload", payload)
         call("POST", "/api/device/events", body)
         Unit
+    }
+
+    suspend fun rawCall(method: String, path: String, bodyJson: String): JSONObject = withContext(Dispatchers.IO) {
+        val body = if (bodyJson.isBlank()) null else runCatching { JSONObject(bodyJson) }.getOrNull()
+        call(method, path, body)
     }
 
     private fun call(method: String, path: String, body: JSONObject?): JSONObject {

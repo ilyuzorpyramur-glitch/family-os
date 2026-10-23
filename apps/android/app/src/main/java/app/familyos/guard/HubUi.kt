@@ -55,7 +55,16 @@ fun HomeScreen(
     message: String?,
     onRefresh: () -> Unit,
     onOpenProfile: () -> Unit,
-    onAddEvent: (title: String, geofenceId: String?, date: String, start: String, minutes: Int) -> Unit,
+    onAddEvent: (
+        title: String,
+        description: String,
+        geofenceId: String?,
+        date: String,
+        start: String,
+        minutes: Int,
+        lat: Double?,
+        lng: Double?,
+    ) -> Unit,
 ) {
     var selectedDate by remember { mutableStateOf(java.time.LocalDate.now().toString()) }
     var showAdd by remember { mutableStateOf(false) }
@@ -224,8 +233,8 @@ fun HomeScreen(
                 geofences = fences,
                 busy = busy,
                 onDismiss = { showAdd = false },
-                onSubmit = { title, geofenceId, date, start, minutes ->
-                    onAddEvent(title, geofenceId, date, start, minutes)
+                onSubmit = { title, description, geofenceId, date, start, minutes, lat, lng ->
+                    onAddEvent(title, description, geofenceId, date, start, minutes, lat, lng)
                     showAdd = false
                 },
             )

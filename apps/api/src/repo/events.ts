@@ -11,6 +11,9 @@ export type EventRow = {
   duration_min: number;
   status: string;
   note: string | null;
+  description: string | null;
+  lat: number | null;
+  lng: number | null;
   created_by: string;
   approved_by: string | null;
   approved_at: string | null;
@@ -25,14 +28,17 @@ export type EventInput = {
   startTime: string;
   durationMin?: number;
   note?: string | null;
+  description?: string | null;
+  lat?: number | null;
+  lng?: number | null;
   createdBy?: string;
 };
 
 export function createEvent(db: DB, input: EventInput): EventRow {
   const id = `evt_${crypto.randomUUID()}`;
   db.prepare(
-    `INSERT INTO events (id, child_id, title, geofence_id, date, start_time, duration_min, note, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO events (id, child_id, title, geofence_id, date, start_time, duration_min, note, description, lat, lng, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.childId,
@@ -42,6 +48,9 @@ export function createEvent(db: DB, input: EventInput): EventRow {
     input.startTime,
     Math.max(15, Math.min(720, Math.round(input.durationMin ?? 60))),
     input.note ?? null,
+    input.description ?? null,
+    input.lat ?? null,
+    input.lng ?? null,
     input.createdBy ?? "child",
   );
   return getEvent(db, id)!;

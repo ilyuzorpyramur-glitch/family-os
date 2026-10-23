@@ -5,9 +5,9 @@ import type { DB } from "../db.js";
 import { bearerActor, isAuthorized } from "../auth.js";
 import { toMinor } from "../lib/money.js";
 import { isValidISODate, monthStartISO, todayISO } from "../lib/time.js";
-import { listAccounts } from "../repo/accounts.js";
+import { listAccounts, upsertAccount } from "../repo/accounts.js";
 import { listCategories } from "../repo/categories.js";
-import { balanceByCurrency, listTransactions, saveTransaction, summaryByCurrency } from "../repo/transactions.js";
+import { balanceByCurrency, listTransactions, saveTransaction, summaryByCategory, summaryByCurrency } from "../repo/transactions.js";
 import { deleteSetting, getSetting, getZenMoneyToken, maskToken, setZenMoneyToken } from "../repo/settings.js";
 import { syncState, syncZenMoney } from "../zenmoney/sync.js";
 
@@ -126,6 +126,69 @@ export function registerApi(app: FastifyInstance, ctx: Ctx): void {
     } catch (error) {
       return reply.code(400).send({ ok: false, error: { code: "TX_REJECTED", message: (error as Error).message } });
     }
+  });
+
+  app.get("/api/money/overview", { preHandler: guard }, async (request) => {
+    const q = request.query as Record<string, string | undefined>;
+    const from = q.from && isValidISODate(q.from) ? q.from : monthStartISO();
+    const to = q.to && isValidISODate(q.to) ? q.to : todayISO();
+    const accounts = listAccounts(db, true).map((a) => ({ ...a, balance: a.balance_minor / 100 }));
+    const totals = summaryByCurrency(db, from, to).map((s) => ({
+      ...s,
+      income: s.income / 100,
+      expense: s.expense / 100,
+      net: s.net / 100,
+    }));
+    const byCategory = summaryByCategory(db, from, to).map((c) => ({ ...c, total: c.total / 100 }));
+    const recent = listTransactions(db, { limit: 20 }).map((t) => ({ ...t, amount: t.amount_minor / 100 }));
+    return { ok: true, data: { from, to, currency: config.baseCurrency, accounts, totals, byCategory, recent } };
+  });
+
+  app.post("/api/accounts", { preHandler: guard }, async (request, reply) => {
+    const body = z
+      .object({
+        title: z.string().min(1).max(80),
+        type: z.enum(["cash", "ccard", "checking", "savings", "credit"]).default("cash"),
+        currency: z.string().length(3).optional(),
+        balance: z.union([z.number(), z.string()]).optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    const account = upsertAccount(db, {
+      title: body.data.title.trim(),
+      type: body.data.type,
+      currency: (body.data.currency ?? config.baseCurrency).toUpperCase(),
+      balanceMinor: body.data.balance === undefined ? 0 : Math.round(Number(body.data.balance) * 100),
+      source: "local",
+    });
+    return { ok: true, data: { ...account, balance: account.balance_minor / 100 } };
+  });
+
+  app.post("/api/accounts/:id/archive", { preHandler: guard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const account = listAccounts(db, true).find((a) => a.id === id);
+    if (!account) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Счёт не найден" } });
+    db.prepare("UPDATE accounts SET archived = 1, updated_at = datetime('now') WHERE id = ?").run(id);
+    return { ok: true };
+  });
+
+  app.post("/api/categories", { preHandler: guard }, async (request, reply) => {
+    const body = z
+      .object({ title: z.string().min(1).max(60), kind: z.enum(["expense", "income"]).default("expense") })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    const id = `cat_${crypto.randomUUID()}`;
+    db.prepare("INSERT INTO categories (id, external_id, title, kind) VALUES (?, ?, ?, ?)").run(
+      id,
+      id,
+      body.data.title.trim(),
+      body.data.kind,
+    );
+    return { ok: true, data: { id, title: body.data.title.trim(), kind: body.data.kind } };
   });
 
   app.post("/api/zenmoney/token", { preHandler: guard }, async (request, reply) => {
