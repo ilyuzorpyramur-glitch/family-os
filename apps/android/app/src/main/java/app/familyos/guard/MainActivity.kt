@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVis
 import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -694,11 +695,17 @@ private fun minutesText(minutes: Int): String {
 
 @Composable
 private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick) {
+    TextButton(
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+    ) {
         Text(
             label,
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            fontSize = 11.sp,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
