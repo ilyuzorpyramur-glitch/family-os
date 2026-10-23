@@ -170,6 +170,8 @@ function flashBlock(flash: string | null): string {
     shop_item: "Товар добавлен в магазин.",
     purchase_approved: "Покупка одобрена.",
     purchase_denied: "Покупка отклонена.",
+    proposal_priced: "Цена установлена, товар в магазине.",
+    proposal_rejected: "Предложение отклонено.",
   };
   if (flash.startsWith("err:")) {
     return `<div class="banner err">${escapeHtml(flash.slice(4))}</div>`;
@@ -493,7 +495,7 @@ const STAT_LABELS: Record<string, string> = {
   discipline: "Дисциплина",
 };
 
-export function questsPage(data: QuestOverview, flash: string | null): string {
+export function questsPage(data: QuestOverview, flash: string | null, publicUrl = ""): string {
   const childCards = data.children.length
     ? data.children
         .map((child) => {
@@ -524,7 +526,17 @@ export function questsPage(data: QuestOverview, flash: string | null): string {
                 .map(
                   (q) => `<div class="li">
                     <span>${escapeHtml(q.title)}
-                      <div class="sub">+${q.xp} XP · +${q.coins} монет</div>
+                      <div class="sub">+${q.xp} XP · +${q.coins} монет · ${
+                        q.approval === "agent" ? "подтверждает OpenClaw" : "подтверждает родитель"
+                      }${q.photos_required > 0 ? ` · фото ${q.photos_required}` : ""}</div>
+                      ${(q.photos ?? []).length
+                        ? `<div class="sub">${(q.photos ?? [])
+                            .map(
+                              (ph) =>
+                                `<a href="${escapeHtml(publicUrl)}/uploads/${escapeHtml(ph.path)}" target="_blank" rel="noreferrer">фото</a>`,
+                            )
+                            .join(" · ")}</div>`
+                        : ""}
                     </span>
                     <span>
                       <form class="inline" method="post" action="/app/quests/${escapeHtml(q.id)}/decide">
@@ -592,6 +604,13 @@ export function questsPage(data: QuestOverview, flash: string | null): string {
                     <option value="kindness">Доброта</option>
                   </select>
                 </div>
+                <div class="field"><label>Подтверждение</label>
+                  <select name="approval" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px">
+                    <option value="parent">Родитель</option>
+                    <option value="agent">OpenClaw</option>
+                  </select>
+                </div>
+                <div class="field"><label>Фото, шт.</label><input type="number" name="photosRequired" value="0" min="0" max="10"></div>
                 <button type="submit">Создать</button>
               </div>
             </form>
@@ -622,6 +641,31 @@ export function questsPage(data: QuestOverview, flash: string | null): string {
       <section class="card">
         <div class="section-head"><h2>Магазин наград</h2></div>
         ${shopItems}
+        <h3 style="margin-top:16px">Предложения детей</h3>
+        ${
+          data.proposals.length
+            ? data.proposals
+                .map(
+                  (proposal) => `<div class="li">
+                    <span>${escapeHtml(proposal.title)}
+                      <div class="sub">${escapeHtml(proposal.description ?? "")}
+                      ${proposal.photo_path ? ` · <a href="${escapeHtml(publicUrl)}/uploads/${escapeHtml(proposal.photo_path)}" target="_blank" rel="noreferrer">фото</a>` : ""}</div>
+                    </span>
+                    <span>
+                      <form class="inline" method="post" action="/app/quests/proposals/${escapeHtml(proposal.id)}/price">
+                        <input type="number" name="priceCoins" min="1" placeholder="цена" style="width:80px;padding:6px">
+                        <button type="submit">Цена</button>
+                      </form>
+                      <form class="inline" method="post" action="/app/quests/proposals/${escapeHtml(proposal.id)}/reject">
+                        <button class="ghost" type="submit">Отклонить</button>
+                      </form>
+                    </span>
+                  </div>`,
+                )
+                .join("")
+            : `<p class="sub">Нет новых предложений.</p>`
+        }
+
         <h3 style="margin-top:16px">Добавить товар</h3>
         <form method="post" action="/app/quests/shop/items">
           <div class="field"><label>Название</label><input name="title" placeholder="Поход в кино" required></div>

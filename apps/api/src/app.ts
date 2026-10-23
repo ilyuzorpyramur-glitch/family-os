@@ -1,4 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { createReadStream, existsSync } from "node:fs";
+import { join } from "node:path";
 import cookie from "@fastify/cookie";
 import formbody from "@fastify/formbody";
 import type { Config } from "./config.js";
@@ -27,6 +29,14 @@ export async function buildApp({ config, db, logger = false }: AppOptions): Prom
   await app.register(formbody);
 
   seedCategories(db);
+
+  app.get("/uploads/:name", async (request, reply) => {
+    const { name } = request.params as { name: string };
+    if (!/^[a-f0-9-]{36}\.jpg$/i.test(name)) return reply.code(404).send();
+    const file = join(config.dataDir, "uploads", name);
+    if (!existsSync(file)) return reply.code(404).send();
+    return reply.type("image/jpeg").send(createReadStream(file));
+  });
 
   registerApi(app, { config, db });
   registerGuardApi(app, { config, db });

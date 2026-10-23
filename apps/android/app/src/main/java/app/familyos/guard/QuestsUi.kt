@@ -35,7 +35,7 @@ fun QuestsScreen(
     quests: QuestData?,
     busy: Boolean,
     message: String?,
-    onComplete: (String) -> Unit,
+    onComplete: (String, Boolean) -> Unit,
     onRefresh: () -> Unit,
 ) {
     Column(
@@ -71,7 +71,7 @@ fun QuestsScreen(
             Text("Новых заданий нет.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             active.forEach { quest ->
-                QuestCard(quest, busy, onComplete)
+                QuestCard(quest, busy) { id, photos -> onComplete(id, photos) }
             }
         }
 
@@ -163,7 +163,7 @@ private fun StatChip(label: String, value: Int) {
 }
 
 @Composable
-private fun QuestCard(quest: QuestItem, busy: Boolean, onComplete: (String) -> Unit) {
+private fun QuestCard(quest: QuestItem, busy: Boolean, onComplete: (String, Boolean) -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp)) {
             Text(quest.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -179,11 +179,13 @@ private fun QuestCard(quest: QuestItem, busy: Boolean, onComplete: (String) -> U
             )
             Spacer(Modifier.height(10.dp))
             Button(
-                onClick = { onComplete(quest.id) },
+                onClick = { onComplete(quest.id, quest.photosRequired > 0) },
                 enabled = !busy,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Выполнено")
+                Text(
+                    if (quest.photosRequired > 0) "Добавить фото (${quest.photosRequired})" else "Выполнено",
+                )
             }
         }
     }
@@ -194,8 +196,11 @@ fun ShopScreen(
     shop: ShopData?,
     busy: Boolean,
     message: String?,
+    proposalPhoto: String?,
     onBuy: (String) -> Unit,
     onRefresh: () -> Unit,
+    onPickPhoto: () -> Unit,
+    onPropose: (String, String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -232,6 +237,75 @@ fun ShopScreen(
         } else {
             items.forEach { item ->
                 ShopItemCard(item, shop?.profile?.coins ?: 0, busy, onBuy)
+            }
+        }
+
+        Text("Предложить свой товар", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        var title by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+        var description by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(14.dp)) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Что хочешь купить") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Описание (необязательно)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onPickPhoto, enabled = !busy) {
+                        Text(if (proposalPhoto == null) "Фото" else "Фото добавлено")
+                    }
+                    Button(
+                        onClick = { onPropose(title, description); title = ""; description = "" },
+                        enabled = !busy && title.isNotBlank(),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Отправить OpenClaw")
+                    }
+                }
+                Text(
+                    "OpenClaw посмотрит товар и назначит цену в монетах.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                )
+            }
+        }
+
+        val proposals = shop?.proposals.orEmpty()
+        if (proposals.isNotEmpty()) {
+            Text("Мои предложения", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            proposals.forEach { proposal ->
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(proposal.title)
+                            proposal.description?.let {
+                                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            }
+                        }
+                        Text(
+                            when (proposal.status) {
+                                "pending" -> "ждёт цену"
+                                "priced" -> "${proposal.priceCoins ?: 0} монет"
+                                else -> "отклонено"
+                            },
+                            color = Color(0xFFFBBF24),
+                            fontSize = 12.sp,
+                        )
+                    }
+                }
             }
         }
 

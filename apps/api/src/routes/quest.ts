@@ -4,6 +4,7 @@ import { bearerActor, isAdminCookie } from "../auth.js";
 import type { Ctx } from "./api.js";
 import { findDeviceByToken, getChild } from "../repo/guard.js";
 import {
+  addQuestPhoto,
   buyItem,
   completeQuest,
   createQuest,
@@ -14,8 +15,14 @@ import {
   listQuests,
   listShopItems,
   profileView,
+  createProposal,
+  listProposals,
+  priceProposal,
+  rejectProposal,
+  questPhotos,
   questOverview,
 } from "../repo/quest.js";
+import { imageUrl, saveImage } from "../uploads.js";
 
 function deviceFromRequest(request: FastifyRequest, ctx: Ctx) {
   const header = request.headers.authorization ?? "";
@@ -58,6 +65,8 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
         coins: z.number().int().min(0).max(1000).optional(),
         stat: z.enum(["strength", "intellect", "creativity", "kindness", "discipline"]).optional(),
         dueAt: z.string().optional(),
+        approval: z.enum(["parent", "agent"]).default("parent"),
+        photosRequired: z.number().int().min(0).max(10).default(0),
       })
       .safeParse(request.body);
 
@@ -124,6 +133,34 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
     }
   });
 
+  app.get("/api/guard/shop/proposals", { preHandler: parentGuard }, async () => ({
+    ok: true,
+    data: listProposals(db).map((p) => ({ ...p, photoUrl: imageUrl(config.publicUrl, p.photo_path) })),
+  }));
+
+  app.post("/api/guard/shop/proposals/:id/price", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ priceCoins: z.number().int().min(1).max(100000) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужна цена" } });
+    }
+    try {
+      const result = priceProposal(db, id, body.data.priceCoins, "parent");
+      return { ok: true, data: result };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: { code: "PRICE_FAILED", message: (error as Error).message } });
+    }
+  });
+
+  app.post("/api/guard/shop/proposals/:id/reject", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      return { ok: true, data: rejectProposal(db, id, "parent") };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: { code: "REJECT_FAILED", message: (error as Error).message } });
+    }
+  });
+
   // --- Device API для ребёнка ---
 
   app.get("/api/device/quests", { preHandler: deviceGuard }, async (request) => {
@@ -132,8 +169,8 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
       ok: true,
       data: {
         profile: profileView(db, device.child_id),
-        active: listQuests(db, { childId: device.child_id, status: "active", limit: 50 }),
-        completed: listQuests(db, { childId: device.child_id, status: "completed", limit: 50 }),
+        active: withPhotos(db, listQuests(db, { childId: device.child_id, status: "active", limit: 50 })),
+        completed: withPhotos(db, listQuests(db, { childId: device.child_id, status: "completed", limit: 50 })),
         purchases: listPurchases(db, { childId: device.child_id, limit: 20 }),
       },
     };
@@ -153,6 +190,73 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
     }
   });
 
+  app.post("/api/device/uploads", { preHandler: deviceGuard }, async (request, reply) => {
+    const body = z.object({ imageBase64: z.string().min(10) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужно изображение" } });
+    }
+    try {
+      const path = saveImage(config.dataDir, body.data.imageBase64);
+      return { ok: true, data: { path, url: imageUrl(config.publicUrl, path) } };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: { code: "UPLOAD_FAILED", message: (error as Error).message } });
+    }
+  });
+
+  app.post("/api/device/quests/:id/photos", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const { id } = request.params as { id: string };
+    const quest = db.prepare("SELECT child_id FROM quests WHERE id = ?").get(id) as { child_id: string } | undefined;
+    if (!quest || quest.child_id !== device.child_id) {
+      return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Задание не найдено" } });
+    }
+    const body = z.object({ images: z.array(z.string().min(10)).min(1).max(5) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужны фото" } });
+    }
+    const saved = body.data.images.map((image) => addQuestPhoto(db, id, saveImage(config.dataDir, image)));
+    return { ok: true, data: { photos: saved.map((p) => ({ id: p.id, url: imageUrl(config.publicUrl, p.path) })) } };
+  });
+
+  app.post("/api/device/shop/proposals", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const body = z
+      .object({
+        title: z.string().min(1).max(120),
+        description: z.string().max(1000).optional(),
+        imageBase64: z.string().min(10).optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    try {
+      const photoPath = body.data.imageBase64 ? saveImage(config.dataDir, body.data.imageBase64) : null;
+      const proposal = createProposal(db, {
+        childId: device.child_id,
+        title: body.data.title,
+        description: body.data.description ?? null,
+        photoPath,
+      });
+      return { ok: true, data: { ...proposal, photoUrl: imageUrl(config.publicUrl, proposal.photo_path) } };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: { code: "PROPOSAL_FAILED", message: (error as Error).message } });
+    }
+  });
+
+  app.get("/api/device/shop/proposals", { preHandler: deviceGuard }, async (request) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    return {
+      ok: true,
+      data: {
+        proposals: listProposals(db, { childId: device.child_id }).map((p) => ({
+          ...p,
+          photoUrl: imageUrl(config.publicUrl, p.photo_path),
+        })),
+      },
+    };
+  });
+
   app.get("/api/device/shop", { preHandler: deviceGuard }, async (request) => {
     const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
     const pending = listPurchases(db, { childId: device.child_id, status: "pending" });
@@ -160,8 +264,14 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
       ok: true,
       data: {
         profile: profileView(db, device.child_id),
-        items: listShopItems(db, true).filter((item) => item.stock === null || item.stock > 0),
+        items: listShopItems(db, true)
+          .filter((item) => item.stock === null || item.stock > 0)
+          .map((item) => ({ ...item, photoUrl: imageUrl(config.publicUrl, item.photo_path) })),
         pending,
+        proposals: listProposals(db, { childId: device.child_id }).map((proposal) => ({
+          ...proposal,
+          photoUrl: imageUrl(config.publicUrl, proposal.photo_path),
+        })),
       },
     };
   });
@@ -176,4 +286,11 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
       return reply.code(400).send({ ok: false, error: { code: "PURCHASE_REJECTED", message: (error as Error).message } });
     }
   });
+}
+
+function withPhotos(db: any, quests: any[]) {
+  return quests.map((quest) => ({
+    ...quest,
+    photos: questPhotos(db, quest.id).map((photo) => ({ id: photo.id, url: `/uploads/${photo.path}` })),
+  }));
 }

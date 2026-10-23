@@ -26,6 +26,8 @@ export type QuestRow = {
   stat: string | null;
   due_at: string | null;
   status: string;
+  approval: string;
+  photos_required: number;
   created_by: string;
   created_at: string;
   completed_at: string | null;
@@ -40,6 +42,7 @@ export type ShopItemRow = {
   kind: string;
   value: string | null;
   stock: number | null;
+  photo_path: string | null;
   active: number;
 };
 
@@ -109,13 +112,15 @@ export type QuestInput = {
   stat?: string | null;
   dueAt?: string | null;
   createdBy?: string;
+  approval?: "parent" | "agent";
+  photosRequired?: number;
 };
 
 export function createQuest(db: DB, input: QuestInput): QuestRow {
   const id = `q_${crypto.randomUUID()}`;
   db.prepare(
-    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.childId,
@@ -127,6 +132,8 @@ export function createQuest(db: DB, input: QuestInput): QuestRow {
     input.stat ?? null,
     input.dueAt ?? null,
     input.createdBy ?? "parent",
+    input.approval ?? "parent",
+    Math.max(0, Math.min(10, Math.round(input.photosRequired ?? 0))),
   );
   addQuestEvent(db, input.childId, id, "created", { by: input.createdBy ?? "parent" });
   return getQuest(db, id)!;
@@ -174,10 +181,23 @@ export function completeQuest(db: DB, questId: string, by = "child"): QuestRow {
   return getQuest(db, questId)!;
 }
 
-export function decideQuest(db: DB, questId: string, approve: boolean, decidedBy = "parent"): QuestRow {
+export function decideQuest(
+  db: DB,
+  questId: string,
+  approve: boolean,
+  decidedBy = "parent",
+  actor: "parent" | "agent" = "parent",
+): QuestRow {
   const quest = getQuest(db, questId);
   if (!quest) throw new Error("Задание не найдено");
   if (quest.status !== "completed") throw new Error("Задание не ждёт проверки");
+
+  if (approve && quest.approval === "parent" && actor === "agent") {
+    throw new Error("Это задание подтверждает родитель");
+  }
+  if (approve && quest.photos_required > 0 && questPhotos(db, questId).length < quest.photos_required) {
+    throw new Error(`Нужно фото: ${quest.photos_required}`);
+  }
 
   const today = localDateISO();
   const run = db.transaction(() => {
@@ -230,6 +250,18 @@ function yesterdayISO(today: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+export type QuestPhotoRow = { id: string; quest_id: string; path: string; created_at: string };
+
+export function addQuestPhoto(db: DB, questId: string, path: string): QuestPhotoRow {
+  const id = `ph_${crypto.randomUUID()}`;
+  db.prepare("INSERT INTO quest_photos (id, quest_id, path) VALUES (?, ?, ?)").run(id, questId, path);
+  return db.prepare("SELECT * FROM quest_photos WHERE id = ?").get(id) as QuestPhotoRow;
+}
+
+export function questPhotos(db: DB, questId: string): QuestPhotoRow[] {
+  return db.prepare("SELECT * FROM quest_photos WHERE quest_id = ? ORDER BY created_at").all(questId) as QuestPhotoRow[];
+}
+
 export function addQuestEvent(db: DB, childId: string, questId: string | null, kind: string, payload?: unknown): void {
   db.prepare("INSERT INTO quest_events (id, child_id, quest_id, kind, payload) VALUES (?, ?, ?, ?, ?)").run(
     `qe_${crypto.randomUUID()}`,
@@ -247,12 +279,12 @@ export function listShopItems(db: DB, activeOnly = true): ShopItemRow[] {
 
 export function createShopItem(
   db: DB,
-  input: { title: string; description?: string | null; priceCoins: number; kind?: string; value?: string | null; stock?: number | null; createdBy?: string },
+  input: { title: string; description?: string | null; priceCoins: number; kind?: string; value?: string | null; stock?: number | null; createdBy?: string; photoPath?: string | null },
 ): ShopItemRow {
   const id = `item_${crypto.randomUUID()}`;
   db.prepare(
-    `INSERT INTO shop_items (id, title, description, price_coins, kind, value, stock, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO shop_items (id, title, description, price_coins, kind, value, stock, photo_path, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.title.trim(),
@@ -261,6 +293,7 @@ export function createShopItem(
     input.kind ?? "privilege",
     input.value ?? null,
     input.stock ?? null,
+    input.photoPath ?? null,
     input.createdBy ?? "parent",
   );
   return db.prepare("SELECT * FROM shop_items WHERE id = ?").get(id) as ShopItemRow;
@@ -347,17 +380,104 @@ export function decidePurchase(db: DB, id: string, approve: boolean, decidedBy =
   return getPurchase(db, id)!;
 }
 
+export type ProposalRow = {
+  id: string;
+  child_id: string;
+  title: string;
+  description: string | null;
+  photo_path: string | null;
+  status: string;
+  price_coins: number | null;
+  priced_by: string | null;
+  priced_at: string | null;
+  created_at: string;
+};
+
+export function createProposal(
+  db: DB,
+  input: { childId: string; title: string; description?: string | null; photoPath?: string | null },
+): ProposalRow {
+  const id = `prop_${crypto.randomUUID()}`;
+  db.prepare(
+    "INSERT INTO shop_proposals (id, child_id, title, description, photo_path) VALUES (?, ?, ?, ?, ?)",
+  ).run(id, input.childId, input.title.trim(), input.description?.trim() ?? null, input.photoPath ?? null);
+  return getProposal(db, id)!;
+}
+
+export function getProposal(db: DB, id: string): ProposalRow | undefined {
+  return db.prepare("SELECT * FROM shop_proposals WHERE id = ?").get(id) as ProposalRow | undefined;
+}
+
+export function listProposals(db: DB, opts: { status?: string; childId?: string } = {}): ProposalRow[] {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (opts.status) {
+    where.push("status = ?");
+    params.push(opts.status);
+  }
+  if (opts.childId) {
+    where.push("child_id = ?");
+    params.push(opts.childId);
+  }
+  return db
+    .prepare(
+      `SELECT * FROM shop_proposals ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       ORDER BY created_at DESC LIMIT 200`,
+    )
+    .all(...params) as ProposalRow[];
+}
+
+export function priceProposal(
+  db: DB,
+  id: string,
+  priceCoins: number,
+  pricedBy = "agent",
+): { proposal: ProposalRow; item: ShopItemRow } {
+  const proposal = getProposal(db, id);
+  if (!proposal) throw new Error("Предложение не найдено");
+  if (proposal.status !== "pending") throw new Error("Предложение уже обработано");
+  if (!Number.isFinite(priceCoins) || priceCoins < 1) throw new Error("Цена должна быть больше нуля");
+
+  const item = createShopItem(db, {
+    title: proposal.title,
+    description: proposal.description,
+    priceCoins,
+    kind: "privilege",
+    photoPath: proposal.photo_path,
+    createdBy: pricedBy,
+  });
+
+  db.prepare(
+    "UPDATE shop_proposals SET status = 'priced', price_coins = ?, priced_by = ?, priced_at = datetime('now') WHERE id = ?",
+  ).run(Math.round(priceCoins), pricedBy, id);
+  addQuestEvent(db, proposal.child_id, null, "proposal_priced", { proposalId: id, price: priceCoins, by: pricedBy });
+  return { proposal: getProposal(db, id)!, item };
+}
+
+export function rejectProposal(db: DB, id: string, by = "parent"): ProposalRow {
+  const proposal = getProposal(db, id);
+  if (!proposal) throw new Error("Предложение не найдено");
+  if (proposal.status !== "pending") throw new Error("Предложение уже обработано");
+  db.prepare("UPDATE shop_proposals SET status = 'rejected', priced_by = ?, priced_at = datetime('now') WHERE id = ?").run(
+    by,
+    id,
+  );
+  addQuestEvent(db, proposal.child_id, null, "proposal_rejected", { proposalId: id, by });
+  return getProposal(db, id)!;
+}
+
 export type QuestOverview = {
   date: string;
   children: {
     id: string;
     name: string;
     profile: ProfileView;
-    active: QuestRow[];
-    pending: QuestRow[];
+    active: (QuestRow & { photos: QuestPhotoRow[] })[];
+    pending: (QuestRow & { photos: QuestPhotoRow[] })[];
     purchases: (PurchaseRow & { item_title: string })[];
   }[];
   shop: ShopItemRow[];
+  proposals: ProposalRow[];
 };
 
 export function questOverview(db: DB): QuestOverview {
@@ -366,13 +486,24 @@ export function questOverview(db: DB): QuestOverview {
       id: child.id,
       name: child.name,
       profile: profileView(db, child.id),
-      active: listQuests(db, { childId: child.id, status: "active", limit: 50 }),
-      pending: listQuests(db, { childId: child.id, status: "completed", limit: 50 }),
+      active: listQuests(db, { childId: child.id, status: "active", limit: 50 }).map((q) => ({
+        ...q,
+        photos: questPhotos(db, q.id),
+      })),
+      pending: listQuests(db, { childId: child.id, status: "completed", limit: 50 }).map((q) => ({
+        ...q,
+        photos: questPhotos(db, q.id),
+      })),
       purchases: listPurchases(db, { childId: child.id, status: "pending" }).map((p) => ({
         ...p,
         item_title: p.title,
       })),
     }),
   );
-  return { date: localDateISO(), children, shop: listShopItems(db, false) };
+  return {
+    date: localDateISO(),
+    children,
+    shop: listShopItems(db, false),
+    proposals: listProposals(db, { status: "pending" }),
+  };
 }

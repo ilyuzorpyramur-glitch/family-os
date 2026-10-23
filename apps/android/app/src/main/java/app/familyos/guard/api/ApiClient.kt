@@ -4,6 +4,7 @@ import app.familyos.guard.data.GuardStore
 import app.familyos.guard.data.Policy
 import app.familyos.guard.data.QuestData
 import app.familyos.guard.data.ShopData
+import app.familyos.guard.data.ProposalItem
 import app.familyos.guard.data.UsageCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -54,9 +55,20 @@ class ApiClient(private val store: GuardStore) {
         QuestData.fromJson(call("GET", "/api/device/quests", null))
     }
 
-    suspend fun completeQuest(questId: String) = withContext(Dispatchers.IO) {
+    suspend fun completeQuest(questId: String, images: List<String> = emptyList()) = withContext(Dispatchers.IO) {
+        if (images.isNotEmpty()) {
+            val body = JSONObject().put("images", JSONArray(images))
+            call("POST", "/api/device/quests/$questId/photos", body)
+        }
         call("POST", "/api/device/quests/$questId/complete", JSONObject())
         Unit
+    }
+
+    suspend fun proposeShopItem(title: String, description: String, imageBase64: String?): ProposalItem = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("title", title)
+        if (description.isNotBlank()) body.put("description", description)
+        if (!imageBase64.isNullOrBlank()) body.put("imageBase64", imageBase64)
+        ProposalItem.fromJson(call("POST", "/api/device/shop/proposals", body).getJSONObject("data"))
     }
 
     suspend fun shop(): ShopData = withContext(Dispatchers.IO) {

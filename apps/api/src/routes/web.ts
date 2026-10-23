@@ -22,6 +22,8 @@ import {
   createShopItem,
   decidePurchase,
   decideQuest,
+  priceProposal,
+  rejectProposal,
   questOverview,
 } from "../repo/quest.js";
 
@@ -202,7 +204,7 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
   app.get("/app/quests", { preHandler: requirePage }, async (request, reply) => {
     const q = request.query as Record<string, string | undefined>;
     reply.type("text/html; charset=utf-8");
-    return questsPage(questOverview(db), q.flash ?? null);
+    return questsPage(questOverview(db), q.flash ?? null, config.publicUrl.replace(/\/$/, ""));
   });
 
   app.post("/app/quests/children/:id/create", { preHandler: requirePage }, async (request, reply) => {
@@ -219,6 +221,8 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
       xp: Number.isFinite(xp) ? xp : 10,
       coins: Number.isFinite(coins) ? coins : 5,
       stat: stat as "strength" | "intellect" | "creativity" | "kindness" | "discipline" | undefined,
+      approval: (body.approval as "parent" | "agent") ?? "parent",
+      photosRequired: Number.isFinite(Number(body.photosRequired)) ? Number(body.photosRequired) : 0,
       createdBy: "parent",
     });
     return reply.redirect("/app/quests?flash=quest_created");
@@ -243,6 +247,31 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
     try {
       decidePurchase(db, id, approve, "parent");
       return reply.redirect(`/app/quests?flash=${approve ? "purchase_approved" : "purchase_denied"}`);
+    } catch (error) {
+      return reply.redirect(`/app/quests?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
+    }
+  });
+
+  app.post("/app/quests/proposals/:id/price", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { priceCoins?: string };
+    const price = Number(body.priceCoins);
+    if (!Number.isFinite(price) || price < 1) {
+      return reply.redirect(`/app/quests?flash=${encodeURIComponent("err:Цена должна быть больше нуля")}`);
+    }
+    try {
+      priceProposal(db, id, price, "parent");
+      return reply.redirect("/app/quests?flash=proposal_priced");
+    } catch (error) {
+      return reply.redirect(`/app/quests?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
+    }
+  });
+
+  app.post("/app/quests/proposals/:id/reject", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      rejectProposal(db, id, "parent");
+      return reply.redirect("/app/quests?flash=proposal_rejected");
     } catch (error) {
       return reply.redirect(`/app/quests?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
     }

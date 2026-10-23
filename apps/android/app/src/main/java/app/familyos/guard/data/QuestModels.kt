@@ -40,6 +40,9 @@ data class QuestItem(
     val coins: Int,
     val stat: String?,
     val status: String,
+    val approval: String,
+    val photosRequired: Int,
+    val photos: List<String>,
 ) {
     companion object {
         fun fromJson(o: JSONObject): QuestItem = QuestItem(
@@ -51,6 +54,13 @@ data class QuestItem(
             coins = o.optInt("coins", 0),
             stat = o.optString("stat").ifBlank { null },
             status = o.optString("status", "active"),
+            approval = o.optString("approval", "parent"),
+            photosRequired = o.optInt("photos_required", 0),
+            photos = o.optJSONArray("photos")?.let { arr ->
+                (0 until arr.length()).mapNotNull { index ->
+                    arr.optJSONObject(index)?.optString("url")?.ifBlank { null }
+                }
+            }.orEmpty(),
         )
     }
 }
@@ -108,10 +118,31 @@ data class ShopItem(
     }
 }
 
+data class ProposalItem(
+    val id: String,
+    val title: String,
+    val description: String?,
+    val status: String,
+    val priceCoins: Int?,
+    val photoUrl: String?,
+) {
+    companion object {
+        fun fromJson(o: JSONObject): ProposalItem = ProposalItem(
+            id = o.optString("id"),
+            title = o.optString("title"),
+            description = if (o.isNull("description")) null else o.optString("description").ifBlank { null },
+            status = o.optString("status", "pending"),
+            priceCoins = if (o.isNull("price_coins")) null else o.optInt("price_coins"),
+            photoUrl = if (o.isNull("photoUrl")) null else o.optString("photoUrl").ifBlank { null },
+        )
+    }
+}
+
 data class ShopData(
     val profile: Profile,
     val items: List<ShopItem>,
     val pending: List<PurchaseItem>,
+    val proposals: List<ProposalItem>,
 ) {
     companion object {
         fun fromJson(root: JSONObject): ShopData {
@@ -120,6 +151,9 @@ data class ShopData(
                 profile = Profile.fromJson(data.getJSONObject("profile")),
                 items = data.optJSONArray("items").toShopItems(),
                 pending = data.optJSONArray("pending").toPurchases(),
+                proposals = data.optJSONArray("proposals")?.let { arr ->
+                    (0 until arr.length()).map { ProposalItem.fromJson(arr.getJSONObject(it)) }
+                }.orEmpty(),
             )
         }
     }

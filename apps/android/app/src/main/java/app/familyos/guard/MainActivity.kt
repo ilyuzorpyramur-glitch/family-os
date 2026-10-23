@@ -8,12 +8,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.net.Uri
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +37,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
+import androidx.compose.foundation.layout.navigationBarsPaddingimport androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -80,9 +84,25 @@ class MainActivity : ComponentActivity() {
     private var tab by mutableStateOf(0)
     private var quests by mutableStateOf<QuestData?>(null)
     private var shop by mutableStateOf<ShopData?>(null)
+    private var pendingQuestId by mutableStateOf<String?>(null)
+    private var proposalPhoto by mutableStateOf<String?>(null)
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private val questPhotoPicker =
+        registerForActivityResult(PickMultipleVisualMedia(3)) { uris ->
+            val questId = pendingQuestId
+            if (questId != null && uris.isNotEmpty()) uploadQuestPhotos(questId, uris)
+        }
+
+    private val proposalPhotoPicker =
+        registerForActivityResult(PickVisualMedia()) { uri ->
+            if (uri != null) {
+                proposalPhoto = ImageUtils.toBase64(this, uri)
+                message = if (proposalPhoto != null) "Фото добавлено" else "Не удалось прочитать фото"
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -115,11 +135,6 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (state.configured) {
                         Column(Modifier.fillMaxSize()) {
-                            TabRow(selectedTabIndex = tab) {
-                                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Щит") })
-                                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Задания") })
-                                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Магазин") })
-                            }
                             Box(Modifier.weight(1f)) {
                                 when (tab) {
                                     0 -> Dashboard(
@@ -137,17 +152,31 @@ class MainActivity : ComponentActivity() {
                                         quests = quests,
                                         busy = busy,
                                         message = message,
-                                        onComplete = { completeQuest(it) },
+                                        onComplete = { id, photos -> startQuest(id, photos) },
                                         onRefresh = { refresh() },
                                     )
                                     else -> ShopScreen(
                                         shop = shop,
                                         busy = busy,
                                         message = message,
+                                        proposalPhoto = proposalPhoto,
                                         onBuy = { buyItem(it) },
                                         onRefresh = { refresh() },
+                                        onPickPhoto = { startProposalPhoto() },
+                                        onPropose = { title, description -> proposeItem(title, description) },
                                     )
                                 }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .navigationBarsPadding()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                            ) {
+                                TabButton("Щит", tab == 0) { tab = 0 }
+                                TabButton("Задания", tab == 1) { tab = 1 }
+                                TabButton("Магазин", tab == 2) { tab = 2 }
                             }
                         }
                     } else {
@@ -241,6 +270,58 @@ class MainActivity : ComponentActivity() {
                 shop = api.shop()
             }.onSuccess {
                 message = "Запрос на покупку отправлен родителю"
+            }.onFailure {
+                message = it.message
+            }
+            busy = false
+        }
+    }
+
+    private fun startQuest(questId: String, requiresPhotos: Boolean) {
+        if (requiresPhotos) {
+            pendingQuestId = questId
+            questPhotoPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+        } else {
+            completeQuest(questId)
+        }
+    }
+
+    private fun uploadQuestPhotos(questId: String, uris: List<Uri>) {
+        lifecycleScope.launch {
+            busy = true
+            val images = uris.mapNotNull { ImageUtils.toBase64(this@MainActivity, it) }
+            if (images.isEmpty()) {
+                message = "Не удалось прочитать фото"
+                busy = false
+                return@launch
+            }
+            val api = ApiClient(store)
+            runCatching {
+                api.completeQuest(questId, images)
+                quests = api.quests()
+            }.onSuccess {
+                message = "Фото отправлены, ждём проверки"
+            }.onFailure {
+                message = it.message
+            }
+            busy = false
+        }
+    }
+
+    private fun startProposalPhoto() {
+        proposalPhotoPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
+    }
+
+    private fun proposeItem(title: String, description: String) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                api.proposeShopItem(title, description, proposalPhoto)
+                shop = api.shop()
+                proposalPhoto = null
+            }.onSuccess {
+                message = "Предложение отправлено. OpenClaw оценит товар."
             }.onFailure {
                 message = it.message
             }
@@ -473,4 +554,15 @@ private fun minutesText(minutes: Int): String {
     val hours = minutes / 60
     val rest = minutes % 60
     return if (rest == 0) "$hours ч" else "$hours ч $rest мин"
+}
+
+@Composable
+private fun TabButton(label: String, selected: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Text(
+            label,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        )
+    }
 }

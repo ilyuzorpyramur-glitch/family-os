@@ -237,6 +237,7 @@ CREATE TABLE IF NOT EXISTS shop_items (
   kind        TEXT NOT NULL DEFAULT 'privilege',
   value       TEXT,
   stock       INTEGER,
+  photo_path  TEXT,
   active      INTEGER NOT NULL DEFAULT 1,
   created_by  TEXT NOT NULL DEFAULT 'parent',
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -254,6 +255,26 @@ CREATE TABLE IF NOT EXISTS shop_purchases (
 );
 
 CREATE INDEX IF NOT EXISTS idx_purchases_status ON shop_purchases(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS quest_photos (
+  id         TEXT PRIMARY KEY,
+  quest_id   TEXT NOT NULL REFERENCES quests(id) ON DELETE CASCADE,
+  path       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS shop_proposals (
+  id          TEXT PRIMARY KEY,
+  child_id    TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  description TEXT,
+  photo_path  TEXT,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  price_coins INTEGER,
+  priced_by   TEXT,
+  priced_at   TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 CREATE TABLE IF NOT EXISTS geofences (
   id           TEXT PRIMARY KEY,
@@ -273,5 +294,15 @@ export function openDb(file: string): DB {
   const db = new Database(file);
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
+  addColumn(db, "quests", "approval", "approval TEXT NOT NULL DEFAULT 'parent'");
+  addColumn(db, "quests", "photos_required", "photos_required INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "shop_items", "photo_path", "photo_path TEXT");
   return db;
+}
+
+function addColumn(db: DB, table: string, column: string, definition: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!columns.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  }
 }

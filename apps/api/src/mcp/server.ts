@@ -7,7 +7,8 @@ import { listAccounts } from "../repo/accounts.js";
 import { listCategories } from "../repo/categories.js";
 import { balanceByCurrency, listTransactions, saveTransaction, summaryByCurrency } from "../repo/transactions.js";
 import { decideExtensionRequest, effectiveLimit, ensurePolicy, guardOverview, listChildren, listEvents, updatePolicy } from "../repo/guard.js";
-import { completeQuest, createQuest, createShopItem, decidePurchase, decideQuest, listPurchases, listQuests, listShopItems, profileView, questOverview } from "../repo/quest.js";
+import { completeQuest, createQuest, createShopItem, decidePurchase, decideQuest, listProposals, listPurchases, listQuests, listShopItems, priceProposal, profileView, questOverview, questPhotos } from "../repo/quest.js";
+import { imageUrl } from "../uploads.js";
 import { getZenMoneyToken } from "../repo/settings.js";
 import { syncState, syncZenMoney } from "../zenmoney/sync.js";
 import type { Ctx } from "../routes/api.js";
@@ -137,6 +138,8 @@ const TOOLS = [
         coins: { type: "integer", minimum: 0, maximum: 1000 },
         stat: { type: "string", enum: ["strength", "intellect", "creativity", "kindness", "discipline"] },
         dueAt: { type: "string" },
+        approval: { type: "string", enum: ["parent", "agent"] },
+        photosRequired: { type: "integer", minimum: 0, maximum: 10 },
       },
       required: ["childId", "title"],
       additionalProperties: false,
@@ -191,6 +194,28 @@ const TOOLS = [
         approve: { type: "boolean" },
       },
       required: ["purchaseId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "shop_proposals",
+    description: "Предложения товаров от детей: название, описание, фото. OpenClaw оценивает и ставит цену.",
+    inputSchema: {
+      type: "object",
+      properties: { status: { type: "string", enum: ["pending", "priced", "rejected"] } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "shop_set_price",
+    description: "Оценить предложенный ребёнком товар и опубликовать его в магазине по указанной цене в монетах.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        proposalId: { type: "string" },
+        priceCoins: { type: "integer", minimum: 1, maximum: 100000 },
+      },
+      required: ["proposalId", "priceCoins"],
       additionalProperties: false,
     },
   },
@@ -457,7 +482,10 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
           return {
             childId,
             profile: profileView(db, childId),
-            quests: listQuests(db, { childId, limit: 100 }),
+            quests: listQuests(db, { childId, limit: 100 }).map((q) => ({
+              ...q,
+              photos: questPhotos(db, q.id).map((photo) => ({ id: photo.id, url: imageUrl(config.publicUrl, photo.path) })),
+            })),
             purchases: listPurchases(db, { childId, limit: 50 }),
           };
         }
@@ -475,6 +503,8 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
             coins: z.number().int().min(0).max(1000).optional(),
             stat: z.enum(["strength", "intellect", "creativity", "kindness", "discipline"]).optional(),
             dueAt: z.string().optional(),
+            approval: z.enum(["parent", "agent"]).optional(),
+            photosRequired: z.number().int().min(0).max(10).optional(),
           })
           .safeParse(args);
         if (!body.success) throw new Error(body.error.issues[0]?.message ?? "Некорректные аргументы");
@@ -486,7 +516,7 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
         const questId = String(args.questId ?? "");
         if (!questId) throw new Error("Нужен questId");
         const approve = args.approve !== false;
-        const quest = decideQuest(db, questId, approve, "agent");
+        const quest = decideQuest(db, questId, approve, "agent", "agent");
         return { quest, profile: profileView(db, quest.child_id) };
       }
 
@@ -519,6 +549,34 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
         const approve = args.approve !== false;
         const purchase = decidePurchase(db, purchaseId, approve, "agent");
         return { purchase, profile: profileView(db, purchase.child_id) };
+      }
+
+      case "shop_proposals": {
+        const status = (args.status as string | undefined) ?? "pending";
+        return {
+          proposals: listProposals(db, { status }).map((p) => ({
+            id: p.id,
+            childId: p.child_id,
+            title: p.title,
+            description: p.description,
+            status: p.status,
+            priceCoins: p.price_coins,
+            photoUrl: imageUrl(config.publicUrl, p.photo_path),
+            createdAt: p.created_at,
+          })),
+        };
+      }
+
+      case "shop_set_price": {
+        const body = z
+          .object({ proposalId: z.string(), priceCoins: z.number().int().min(1).max(100000) })
+          .safeParse(args);
+        if (!body.success) throw new Error(body.error.issues[0]?.message ?? "Некорректные аргументы");
+        const result = priceProposal(db, body.data.proposalId, body.data.priceCoins, "agent");
+        return {
+          proposal: result.proposal,
+          item: { ...result.item, photoUrl: imageUrl(config.publicUrl, result.item.photo_path) },
+        };
       }
 
       default:
