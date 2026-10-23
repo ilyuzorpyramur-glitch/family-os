@@ -76,7 +76,6 @@ private data class UiState(
     val accessibility: Boolean = false,
     val serverUrl: String = "",
     val familyLink: Boolean = false,
-    val deviceOwnerPackage: String? = null,
 )
 
 class MainActivity : ComponentActivity() {
@@ -234,7 +233,6 @@ class MainActivity : ComponentActivity() {
             accessibility = isAccessibilityEnabled(),
             serverUrl = store.serverUrl,
             familyLink = isFamilyLinkInstalled(),
-            deviceOwnerPackage = deviceOwnerPackage(),
         )
         blockUninstallIfOwner()
         if (!configured) return
@@ -383,11 +381,6 @@ class MainActivity : ComponentActivity() {
         return packages.any { name ->
             runCatching { packageManager.getPackageInfo(name, 0) }.isSuccess
         }
-    }
-
-    private fun deviceOwnerPackage(): String? {
-        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        return runCatching { dpm.getDeviceOwnerComponentOnAnyUser()?.packageName }.getOrNull()
     }
 
     private fun blockUninstallIfOwner() {
@@ -556,7 +549,7 @@ private fun Dashboard(
                     Text("Все доступы выданы", color = Color(0xFF34D399), fontWeight = FontWeight.SemiBold)
                 }
                 Text(
-                    if (state.familyLink || state.deviceOwnerPackage?.contains("familylink") == true)
+                    if (state.familyLink)
                         "Google Family Link обнаружен. Если он управляет устройством, наш Device Owner недоступен — используйте Family Link для базовых лимитов, а наши задания и награды поверх."
                     else "Google Family Link не обнаружен.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
