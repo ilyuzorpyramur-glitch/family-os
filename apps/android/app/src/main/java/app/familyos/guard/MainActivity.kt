@@ -16,6 +16,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +33,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -53,6 +56,8 @@ import app.familyos.guard.admin.GuardDeviceAdmin
 import app.familyos.guard.api.ApiClient
 import app.familyos.guard.data.GuardStore
 import app.familyos.guard.data.Policy
+import app.familyos.guard.data.QuestData
+import app.familyos.guard.data.ShopData
 import app.familyos.guard.service.AppBlockService
 import app.familyos.guard.work.GuardNotifications
 import kotlinx.coroutines.launch
@@ -72,6 +77,9 @@ class MainActivity : ComponentActivity() {
     private var state by mutableStateOf(UiState())
     private var busy by mutableStateOf(false)
     private var message by mutableStateOf<String?>(null)
+    private var tab by mutableStateOf(0)
+    private var quests by mutableStateOf<QuestData?>(null)
+    private var shop by mutableStateOf<ShopData?>(null)
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -106,17 +114,42 @@ class MainActivity : ComponentActivity() {
             ) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (state.configured) {
-                        Dashboard(
-                            state = state,
-                            busy = busy,
-                            message = message,
-                            onRefresh = { refresh() },
-                            onAsk = { askForTime() },
-                            onUsageSettings = { openUsageSettings() },
-                            onAccessibilitySettings = { openAccessibilitySettings() },
-                            onAdmin = { requestAdmin() },
-                            onReset = { reset() },
-                        )
+                        Column(Modifier.fillMaxSize()) {
+                            TabRow(selectedTabIndex = tab) {
+                                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Щит") })
+                                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Задания") })
+                                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Магазин") })
+                            }
+                            Box(Modifier.weight(1f)) {
+                                when (tab) {
+                                    0 -> Dashboard(
+                                        state = state,
+                                        busy = busy,
+                                        message = message,
+                                        onRefresh = { refresh() },
+                                        onAsk = { askForTime() },
+                                        onUsageSettings = { openUsageSettings() },
+                                        onAccessibilitySettings = { openAccessibilitySettings() },
+                                        onAdmin = { requestAdmin() },
+                                        onReset = { reset() },
+                                    )
+                                    1 -> QuestsScreen(
+                                        quests = quests,
+                                        busy = busy,
+                                        message = message,
+                                        onComplete = { completeQuest(it) },
+                                        onRefresh = { refresh() },
+                                    )
+                                    else -> ShopScreen(
+                                        shop = shop,
+                                        busy = busy,
+                                        message = message,
+                                        onBuy = { buyItem(it) },
+                                        onRefresh = { refresh() },
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         Setup(
                             initialUrl = state.serverUrl,
@@ -163,9 +196,12 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             busy = true
-            runCatching { ApiClient(store).refreshPolicy() }
+            val api = ApiClient(store)
+            runCatching { api.refreshPolicy() }
                 .onSuccess { state = state.copy(policy = it) }
                 .onFailure { message = it.message }
+            runCatching { api.quests() }.onSuccess { quests = it }
+            runCatching { api.shop() }.onSuccess { shop = it }
             busy = false
         }
     }
@@ -176,6 +212,38 @@ class MainActivity : ComponentActivity() {
             runCatching { ApiClient(store).requestExtension(15, "Запрос из приложения") }
                 .onSuccess { message = "Запрос отправлен. Родитель увидит его в панели." }
                 .onFailure { message = it.message }
+            busy = false
+        }
+    }
+
+    private fun completeQuest(questId: String) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                api.completeQuest(questId)
+                quests = api.quests()
+            }.onSuccess {
+                message = "Отправлено родителю на проверку"
+            }.onFailure {
+                message = it.message
+            }
+            busy = false
+        }
+    }
+
+    private fun buyItem(itemId: String) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                api.buyItem(itemId)
+                shop = api.shop()
+            }.onSuccess {
+                message = "Запрос на покупку отправлен родителю"
+            }.onFailure {
+                message = it.message
+            }
             busy = false
         }
     }

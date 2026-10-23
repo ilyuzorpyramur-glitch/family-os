@@ -2,6 +2,8 @@ package app.familyos.guard.api
 
 import app.familyos.guard.data.GuardStore
 import app.familyos.guard.data.Policy
+import app.familyos.guard.data.QuestData
+import app.familyos.guard.data.ShopData
 import app.familyos.guard.data.UsageCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -46,6 +48,24 @@ class ApiClient(private val store: GuardStore) {
         val body = JSONObject().put("minutes", minutes).put("reason", reason)
         val response = call("POST", "/api/device/extension-request", body)
         response.optJSONObject("data")?.optString("id").orEmpty()
+    }
+
+    suspend fun quests(): QuestData = withContext(Dispatchers.IO) {
+        QuestData.fromJson(call("GET", "/api/device/quests", null))
+    }
+
+    suspend fun completeQuest(questId: String) = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/quests/$questId/complete", JSONObject())
+        Unit
+    }
+
+    suspend fun shop(): ShopData = withContext(Dispatchers.IO) {
+        ShopData.fromJson(call("GET", "/api/device/shop", null))
+    }
+
+    suspend fun buyItem(itemId: String) = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/shop/$itemId/buy", JSONObject())
+        Unit
     }
 
     suspend fun sendEvent(kind: String, payload: JSONObject? = null) = withContext(Dispatchers.IO) {

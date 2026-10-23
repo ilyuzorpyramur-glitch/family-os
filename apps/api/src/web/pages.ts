@@ -2,6 +2,7 @@ import { formatMinor } from "../lib/money.js";
 import type { AccountRow } from "../repo/accounts.js";
 import type { CurrencySummary, TxView } from "../repo/transactions.js";
 import type { GuardEventRow, GuardOverview } from "../repo/guard.js";
+import type { QuestOverview } from "../repo/quest.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -88,6 +89,7 @@ function layout(title: string, body: string, opts: { nav?: boolean } = {}): stri
     ? `<nav>
         <a href="/app">Обзор</a>
         <a href="/app/guard">Guard</a>
+        <a href="/app/quests">Задания</a>
         <a href="/app/settings">Настройки</a>
         <a href="/docs">MCP</a>
         <form class="inline" method="post" action="/logout"><button class="ghost" type="submit">Выйти</button></form>
@@ -162,6 +164,12 @@ function flashBlock(flash: string | null): string {
     guard_policy: "Политика обновлена.",
     guard_approved: "Время разрешено.",
     guard_denied: "Запрос отклонён.",
+    quest_created: "Задание создано.",
+    quest_approved: "Задание одобрено, награда начислена.",
+    quest_denied: "Задание отклонено.",
+    shop_item: "Товар добавлен в магазин.",
+    purchase_approved: "Покупка одобрена.",
+    purchase_denied: "Покупка отклонена.",
   };
   if (flash.startsWith("err:")) {
     return `<div class="banner err">${escapeHtml(flash.slice(4))}</div>`;
@@ -469,6 +477,166 @@ export function deviceTokenPage(childName: string, deviceName: string, token: st
         <pre style="overflow:auto;background:var(--panel2);padding:12px;border-radius:10px;border:1px solid var(--line)"><code>${escapeHtml(token)}</code></pre>
         <p class="sub">Дальше: включите Device Owner через QR/ADB, выдайте доступ к Usage Access и уведомлениям.</p>
         <p><a class="btn" href="/app/guard" style="display:inline-block">Вернуться в Guard</a></p>
+      </section>
+    </main>`,
+    { nav: true },
+  );
+}
+
+const STAT_LABELS: Record<string, string> = {
+  strength: "Сила",
+  intellect: "Интеллект",
+  creativity: "Творчество",
+  kindness: "Доброта",
+  discipline: "Дисциплина",
+};
+
+export function questsPage(data: QuestOverview, flash: string | null): string {
+  const childCards = data.children.length
+    ? data.children
+        .map((child) => {
+          const p = child.profile;
+          const pct = Math.round((p.progress ?? 0) * 100);
+          const stats = Object.entries(STAT_LABELS)
+            .map(([key, label]) => {
+              const value = (p as unknown as Record<string, number>)[key] ?? 0;
+              return `<span class="tag">${label} ${value}</span>`;
+            })
+            .join(" ");
+
+          const active = child.active.length
+            ? child.active
+                .map(
+                  (q) => `<div class="li">
+                    <span>${escapeHtml(q.title)}
+                      <div class="sub">${q.xp} XP · ${q.coins} монет${q.stat ? " · " + escapeHtml(STAT_LABELS[q.stat] ?? q.stat) : ""}</div>
+                    </span>
+                    <span class="tag">активно</span>
+                  </div>`,
+                )
+                .join("")
+            : `<div class="sub">Нет активных заданий.</div>`;
+
+          const pending = child.pending.length
+            ? child.pending
+                .map(
+                  (q) => `<div class="li">
+                    <span>${escapeHtml(q.title)}
+                      <div class="sub">+${q.xp} XP · +${q.coins} монет</div>
+                    </span>
+                    <span>
+                      <form class="inline" method="post" action="/app/quests/${escapeHtml(q.id)}/decide">
+                        <input type="hidden" name="approve" value="yes"><button type="submit">Одобрить</button>
+                      </form>
+                      <form class="inline" method="post" action="/app/quests/${escapeHtml(q.id)}/decide">
+                        <input type="hidden" name="approve" value="no"><button class="ghost" type="submit">Отклонить</button>
+                      </form>
+                    </span>
+                  </div>`,
+                )
+                .join("")
+            : `<div class="sub">Нет заданий на проверке.</div>`;
+
+          const purchases = child.purchases.length
+            ? child.purchases
+                .map(
+                  (buy) => `<div class="li">
+                    <span>${escapeHtml(buy.item_title)}
+                      <div class="sub">${buy.price_coins} монет</div>
+                    </span>
+                    <span>
+                      <form class="inline" method="post" action="/app/quests/purchases/${escapeHtml(buy.id)}/decide">
+                        <input type="hidden" name="approve" value="yes"><button type="submit">Выдать</button>
+                      </form>
+                      <form class="inline" method="post" action="/app/quests/purchases/${escapeHtml(buy.id)}/decide">
+                        <input type="hidden" name="approve" value="no"><button class="ghost" type="submit">Отклонить</button>
+                      </form>
+                    </span>
+                  </div>`,
+                )
+                .join("")
+            : `<div class="sub">Нет запросов на покупку.</div>`;
+
+          return `<section class="card">
+            <div class="section-head">
+              <h2>${escapeHtml(child.name)}</h2>
+              <span class="tag">Уровень ${p.level} · ${p.coins} монет</span>
+            </div>
+            <div class="bar"><span style="width:${pct}%"></span></div>
+            <div class="kv"><span>${p.xp} XP</span><span>до ${p.level + 1} уровня: ${p.xpForNextLevel} XP</span></div>
+            <div style="margin-top:10px">${stats}</div>
+
+            <h3 style="margin-top:16px">Активные задания</h3>
+            ${active}
+
+            <h3 style="margin-top:16px">На проверке</h3>
+            ${pending}
+
+            <h3 style="margin-top:16px">Покупки</h3>
+            ${purchases}
+
+            <h3 style="margin-top:16px">Новое задание</h3>
+            <form method="post" action="/app/quests/children/${escapeHtml(child.id)}/create">
+              <div class="field"><label>Что сделать</label><input name="title" placeholder="Помыть посуду" required></div>
+              <div class="mini-form">
+                <div class="field"><label>XP</label><input type="number" name="xp" value="10" min="0" max="1000"></div>
+                <div class="field"><label>Монеты</label><input type="number" name="coins" value="5" min="0" max="1000"></div>
+                <div class="field"><label>Характеристика</label>
+                  <select name="stat" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px">
+                    <option value="discipline">Дисциплина</option>
+                    <option value="intellect">Интеллект</option>
+                    <option value="strength">Сила</option>
+                    <option value="creativity">Творчество</option>
+                    <option value="kindness">Доброта</option>
+                  </select>
+                </div>
+                <button type="submit">Создать</button>
+              </div>
+            </form>
+          </section>`;
+        })
+        .join("")
+    : `<section class="card"><h2>Дети</h2><p class="sub">Сначала добавьте ребёнка в Guard.</p></section>`;
+
+  const shopItems = data.shop.length
+    ? data.shop
+        .map(
+          (item) => `<div class="li">
+            <span>${escapeHtml(item.title)}${item.description ? `<div class="sub">${escapeHtml(item.description)}</div>` : ""}</span>
+            <span class="tag">${item.price_coins} монет${item.stock === null ? "" : " · остаток " + item.stock}</span>
+          </div>`,
+        )
+        .join("")
+    : `<p class="sub">Магазин пуст.</p>`;
+
+  return layout(
+    "Задания",
+    `<main>
+      ${flashBlock(flash)}
+      <div class="banner">Задания может создавать родитель в панели или OpenClaw через MCP.
+      Ребёнок отмечает выполнение на телефоне, награда начисляется после подтверждения.</div>
+      <div class="split">${childCards}</div>
+
+      <section class="card">
+        <div class="section-head"><h2>Магазин наград</h2></div>
+        ${shopItems}
+        <h3 style="margin-top:16px">Добавить товар</h3>
+        <form method="post" action="/app/quests/shop/items">
+          <div class="field"><label>Название</label><input name="title" placeholder="Поход в кино" required></div>
+          <div class="mini-form">
+            <div class="field"><label>Цена, монет</label><input type="number" name="priceCoins" value="20" min="1"></div>
+            <div class="field"><label>Тип</label>
+              <select name="kind" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px">
+                <option value="privilege">Привилегия</option>
+                <option value="screen_time">Экранное время</option>
+                <option value="money">Деньги</option>
+                <option value="custom">Другое</option>
+              </select>
+            </div>
+            <div class="field"><label>Остаток (пусто = бесконечно)</label><input type="number" name="stock" min="0" placeholder="—"></div>
+            <button type="submit">Добавить</button>
+          </div>
+        </form>
       </section>
     </main>`,
     { nav: true },

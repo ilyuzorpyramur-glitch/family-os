@@ -7,6 +7,7 @@ import { listAccounts } from "../repo/accounts.js";
 import { listCategories } from "../repo/categories.js";
 import { balanceByCurrency, listTransactions, saveTransaction, summaryByCurrency } from "../repo/transactions.js";
 import { decideExtensionRequest, effectiveLimit, ensurePolicy, guardOverview, listChildren, listEvents, updatePolicy } from "../repo/guard.js";
+import { completeQuest, createQuest, createShopItem, decidePurchase, decideQuest, listPurchases, listQuests, listShopItems, profileView, questOverview } from "../repo/quest.js";
 import { getZenMoneyToken } from "../repo/settings.js";
 import { syncState, syncZenMoney } from "../zenmoney/sync.js";
 import type { Ctx } from "../routes/api.js";
@@ -110,6 +111,86 @@ const TOOLS = [
         screenLimitMin: { type: "integer", minimum: 0, maximum: 1440 },
       },
       required: ["childId", "screenLimitMin"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "quest_list",
+    description: "Задания ребёнка и его прогресс: уровень, XP, монеты, характеристики.",
+    inputSchema: {
+      type: "object",
+      properties: { childId: { type: "string" } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "quest_create",
+    description: "Создать задание ребёнку. Награда — XP и монеты, характеристика влияет на профиль.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        childId: { type: "string" },
+        title: { type: "string" },
+        description: { type: "string" },
+        kind: { type: "string", enum: ["once", "daily", "weekly", "habit"] },
+        xp: { type: "integer", minimum: 0, maximum: 1000 },
+        coins: { type: "integer", minimum: 0, maximum: 1000 },
+        stat: { type: "string", enum: ["strength", "intellect", "creativity", "kindness", "discipline"] },
+        dueAt: { type: "string" },
+      },
+      required: ["childId", "title"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "quest_approve",
+    description: "Одобрить или отклонить выполненное задание. При одобрении начисляются XP и монеты.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        questId: { type: "string" },
+        approve: { type: "boolean" },
+      },
+      required: ["questId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "shop_list",
+    description: "Магазин наград и запросы на покупку.",
+    inputSchema: {
+      type: "object",
+      properties: { childId: { type: "string" } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "shop_add",
+    description: "Добавить товар в магазин наград.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        priceCoins: { type: "integer", minimum: 1 },
+        kind: { type: "string", enum: ["privilege", "money", "screen_time", "custom"] },
+        value: { type: "string" },
+        stock: { type: "integer", minimum: 0 },
+      },
+      required: ["title", "priceCoins"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "purchase_decide",
+    description: "Одобрить или отклонить покупку ребёнка в магазине. При одобрении списываются монеты.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        purchaseId: { type: "string" },
+        approve: { type: "boolean" },
+      },
+      required: ["purchaseId"],
       additionalProperties: false,
     },
   },
@@ -368,6 +449,76 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
         const minutes = typeof args.minutes === "number" ? args.minutes : undefined;
         const request = decideExtensionRequest(db, requestId, true, "agent", minutes);
         return { request, policy: ensurePolicy(db, request.child_id) };
+      }
+
+      case "quest_list": {
+        const childId = args.childId as string | undefined;
+        if (childId) {
+          return {
+            childId,
+            profile: profileView(db, childId),
+            quests: listQuests(db, { childId, limit: 100 }),
+            purchases: listPurchases(db, { childId, limit: 50 }),
+          };
+        }
+        return questOverview(db);
+      }
+
+      case "quest_create": {
+        const body = z
+          .object({
+            childId: z.string(),
+            title: z.string().min(1),
+            description: z.string().optional(),
+            kind: z.enum(["once", "daily", "weekly", "habit"]).optional(),
+            xp: z.number().int().min(0).max(1000).optional(),
+            coins: z.number().int().min(0).max(1000).optional(),
+            stat: z.enum(["strength", "intellect", "creativity", "kindness", "discipline"]).optional(),
+            dueAt: z.string().optional(),
+          })
+          .safeParse(args);
+        if (!body.success) throw new Error(body.error.issues[0]?.message ?? "Некорректные аргументы");
+        if (!listChildren(db).some((c) => c.id === body.data.childId)) throw new Error("Ребёнок не найден");
+        return createQuest(db, { ...body.data, createdBy: "agent" });
+      }
+
+      case "quest_approve": {
+        const questId = String(args.questId ?? "");
+        if (!questId) throw new Error("Нужен questId");
+        const approve = args.approve !== false;
+        const quest = decideQuest(db, questId, approve, "agent");
+        return { quest, profile: profileView(db, quest.child_id) };
+      }
+
+      case "shop_list": {
+        const childId = args.childId as string | undefined;
+        return {
+          items: listShopItems(db, false),
+          purchases: listPurchases(db, { childId, limit: 100 }),
+        };
+      }
+
+      case "shop_add": {
+        const body = z
+          .object({
+            title: z.string().min(1),
+            description: z.string().optional(),
+            priceCoins: z.number().int().min(1),
+            kind: z.enum(["privilege", "money", "screen_time", "custom"]).optional(),
+            value: z.string().optional(),
+            stock: z.number().int().min(0).nullable().optional(),
+          })
+          .safeParse(args);
+        if (!body.success) throw new Error(body.error.issues[0]?.message ?? "Некорректные аргументы");
+        return createShopItem(db, { ...body.data, createdBy: "agent" });
+      }
+
+      case "purchase_decide": {
+        const purchaseId = String(args.purchaseId ?? "");
+        if (!purchaseId) throw new Error("Нужен purchaseId");
+        const approve = args.approve !== false;
+        const purchase = decidePurchase(db, purchaseId, approve, "agent");
+        return { purchase, profile: profileView(db, purchase.child_id) };
       }
 
       default:

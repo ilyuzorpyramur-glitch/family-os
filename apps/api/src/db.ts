@@ -186,6 +186,75 @@ CREATE TABLE IF NOT EXISTS usage_apps (
   PRIMARY KEY (child_id, date, package_id)
 );
 
+CREATE TABLE IF NOT EXISTS character_profiles (
+  child_id           TEXT PRIMARY KEY REFERENCES children(id) ON DELETE CASCADE,
+  xp                 INTEGER NOT NULL DEFAULT 0,
+  coins              INTEGER NOT NULL DEFAULT 0,
+  level              INTEGER NOT NULL DEFAULT 1,
+  strength           INTEGER NOT NULL DEFAULT 0,
+  intellect          INTEGER NOT NULL DEFAULT 0,
+  creativity         INTEGER NOT NULL DEFAULT 0,
+  kindness           INTEGER NOT NULL DEFAULT 0,
+  discipline         INTEGER NOT NULL DEFAULT 0,
+  streak_days        INTEGER NOT NULL DEFAULT 0,
+  last_completed_date TEXT,
+  updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS quests (
+  id           TEXT PRIMARY KEY,
+  child_id     TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  title        TEXT NOT NULL,
+  description  TEXT,
+  kind         TEXT NOT NULL DEFAULT 'once',
+  xp           INTEGER NOT NULL DEFAULT 10,
+  coins        INTEGER NOT NULL DEFAULT 5,
+  stat         TEXT,
+  due_at       TEXT,
+  status       TEXT NOT NULL DEFAULT 'active',
+  created_by   TEXT NOT NULL DEFAULT 'parent',
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  completed_at TEXT,
+  approved_at  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_quests_child ON quests(child_id, status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS quest_events (
+  id         TEXT PRIMARY KEY,
+  child_id   TEXT NOT NULL,
+  quest_id   TEXT,
+  kind       TEXT NOT NULL,
+  payload    TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS shop_items (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT,
+  price_coins INTEGER NOT NULL,
+  kind        TEXT NOT NULL DEFAULT 'privilege',
+  value       TEXT,
+  stock       INTEGER,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_by  TEXT NOT NULL DEFAULT 'parent',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS shop_purchases (
+  id          TEXT PRIMARY KEY,
+  child_id    TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  item_id     TEXT NOT NULL REFERENCES shop_items(id),
+  price_coins INTEGER NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'pending',
+  decided_by  TEXT,
+  decided_at  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_purchases_status ON shop_purchases(status, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS geofences (
   id           TEXT PRIMARY KEY,
   child_id     TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,

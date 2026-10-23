@@ -6,7 +6,7 @@ import { listAccounts } from "../repo/accounts.js";
 import { balanceByCurrency, listTransactions, summaryByCurrency } from "../repo/transactions.js";
 import { deleteSetting, getSetting, getZenMoneyToken, maskToken, setZenMoneyToken } from "../repo/settings.js";
 import { syncState, syncZenMoney } from "../zenmoney/sync.js";
-import { dashboardPage, deviceTokenPage, docsPage, guardPage, loginPage, settingsPage } from "../web/pages.js";
+import { dashboardPage, deviceTokenPage, docsPage, guardPage, loginPage, questsPage, settingsPage } from "../web/pages.js";
 import type { Ctx } from "./api.js";
 import {
   createChild,
@@ -17,6 +17,13 @@ import {
   listEvents,
   updatePolicy,
 } from "../repo/guard.js";
+import {
+  createQuest,
+  createShopItem,
+  decidePurchase,
+  decideQuest,
+  questOverview,
+} from "../repo/quest.js";
 
 const MONTHS = [
   "январь",
@@ -190,6 +197,74 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
     } catch (error) {
       return reply.redirect(`/app/guard?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
     }
+  });
+
+  app.get("/app/quests", { preHandler: requirePage }, async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    reply.type("text/html; charset=utf-8");
+    return questsPage(questOverview(db), q.flash ?? null);
+  });
+
+  app.post("/app/quests/children/:id/create", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, string | undefined>;
+    const title = (body.title ?? "").trim();
+    if (!title) return reply.redirect(`/app/quests?flash=${encodeURIComponent("err:Введите название задания")}`);
+    const xp = Number(body.xp);
+    const coins = Number(body.coins);
+    const stat = body.stat && body.stat.length > 0 ? body.stat : undefined;
+    createQuest(db, {
+      childId: id,
+      title,
+      xp: Number.isFinite(xp) ? xp : 10,
+      coins: Number.isFinite(coins) ? coins : 5,
+      stat: stat as "strength" | "intellect" | "creativity" | "kindness" | "discipline" | undefined,
+      createdBy: "parent",
+    });
+    return reply.redirect("/app/quests?flash=quest_created");
+  });
+
+  app.post("/app/quests/:id/decide", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { approve?: string };
+    const approve = body.approve === "yes";
+    try {
+      decideQuest(db, id, approve, "parent");
+      return reply.redirect(`/app/quests?flash=${approve ? "quest_approved" : "quest_denied"}`);
+    } catch (error) {
+      return reply.redirect(`/app/quests?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
+    }
+  });
+
+  app.post("/app/quests/purchases/:id/decide", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { approve?: string };
+    const approve = body.approve === "yes";
+    try {
+      decidePurchase(db, id, approve, "parent");
+      return reply.redirect(`/app/quests?flash=${approve ? "purchase_approved" : "purchase_denied"}`);
+    } catch (error) {
+      return reply.redirect(`/app/quests?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
+    }
+  });
+
+  app.post("/app/quests/shop/items", { preHandler: requirePage }, async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, string | undefined>;
+    const title = (body.title ?? "").trim();
+    const price = Number(body.priceCoins);
+    if (!title || !Number.isFinite(price) || price < 1) {
+      return reply.redirect(`/app/quests?flash=${encodeURIComponent("err:Название и цена обязательны")}`);
+    }
+    const stockRaw = (body.stock ?? "").trim();
+    const stock = stockRaw === "" ? null : Math.max(0, Math.round(Number(stockRaw)));
+    createShopItem(db, {
+      title,
+      priceCoins: price,
+      kind: (body.kind as "privilege" | "money" | "screen_time" | "custom") ?? "privilege",
+      stock: Number.isFinite(stock ?? NaN) ? stock : null,
+      createdBy: "parent",
+    });
+    return reply.redirect("/app/quests?flash=shop_item");
   });
 
   app.get("/docs", { preHandler: requirePage }, async (_request, reply) => {
