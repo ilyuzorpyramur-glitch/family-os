@@ -41,7 +41,8 @@ class LockActivity : ComponentActivity() {
     private lateinit var store: GuardStore
     private var policy by mutableStateOf<Policy?>(null)
     private var message by mutableStateOf<String?>(null)
-    private var busy by mutableStateOf(false)
+    private var busyRefresh by mutableStateOf(false)
+    private var busyAsk by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +66,7 @@ class LockActivity : ComponentActivity() {
                 ),
             ) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    val reason = policy?.blockReasonAt()
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -73,37 +75,50 @@ class LockActivity : ComponentActivity() {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Text("⏳", fontSize = 56.sp)
+                        Text(if (reason == "bedtime") "🌙" else "⏳", fontSize = 56.sp)
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "Время на сегодня вышло",
+                            if (reason == "bedtime") "Сейчас время отдыха" else "Время на сегодня вышло",
                             fontSize = 26.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                         )
                         Spacer(Modifier.height(8.dp))
                         Text(
-                            policy?.let { "Лимит ${it.limitMinutes} мин · использовано ${it.usedMinutes} мин" }
-                                ?: "Лимит экранного времени",
+                            when (reason) {
+                                "bedtime" -> policy?.let { "Экран недоступен с ${it.bedtimeStart} до ${it.bedtimeEnd}" }
+                                else -> policy?.let { "Лимит ${it.limitMinutes} мин · использовано ${it.usedMinutes} мин" }
+                            } ?: "Проверяем политику…",
                             color = Color(0xFF8B9BB0),
                             textAlign = TextAlign.Center,
                         )
                         Spacer(Modifier.height(28.dp))
 
-                        Button(
-                            onClick = { ask() },
-                            enabled = !busy,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(if (busy) "Отправляем…" else "Попросить ещё 15 минут")
+                        if (reason != "bedtime") {
+                            Button(
+                                onClick = { ask() },
+                                enabled = !busyAsk && !busyRefresh,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(if (busyAsk) "Отправляем…" else "Попросить ещё 15 минут")
+                            }
+                            Spacer(Modifier.height(10.dp))
+                        } else {
+                            Text(
+                                "Лимит на сегодня не тратится: действует расписание.",
+                                color = Color(0xFF8B9BB0),
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(Modifier.height(18.dp))
                         }
-                        Spacer(Modifier.height(10.dp))
+
                         Button(
                             onClick = { refresh() },
-                            enabled = !busy,
+                            enabled = !busyRefresh && !busyAsk,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Проверить снова")
+                            Text(if (busyRefresh) "Проверяем…" else "Проверить снова")
                         }
 
                         message?.let {
@@ -128,27 +143,43 @@ class LockActivity : ComponentActivity() {
         refresh()
     }
 
+    override fun onResume() {
+        super.onResume()
+        visible = true
+    }
+
+    override fun onPause() {
+        visible = false
+        super.onPause()
+    }
+
     private fun refresh() {
-        if (!store.isConfigured) return
+        if (!store.isConfigured || busyRefresh) return
         lifecycleScope.launch {
-            busy = true
+            busyRefresh = true
             runCatching { ApiClient(store).refreshPolicy() }
-                .onSuccess {
-                    policy = it
-                    if (it.remainMinutes > 0) finish()
+                .onSuccess { updated ->
+                    policy = updated
+                    if (updated.blockReasonAt() == null) finish()
                 }
-                .onFailure { message = it.message }
-            busy = false
+                .onFailure { message = it.message ?: "Нет связи с сервером" }
+            busyRefresh = false
         }
     }
 
     private fun ask() {
+        if (busyAsk) return
         lifecycleScope.launch {
-            busy = true
+            busyAsk = true
             runCatching { ApiClient(store).requestExtension(15, "Запрос с заблокированного экрана") }
-                .onSuccess { message = "Запрос отправлен. Ждём ответа родителя — экран обновится сам." }
-                .onFailure { message = it.message }
-            busy = false
+                .onSuccess { message = "Запрос отправлен. Экран обновится после ответа родителя." }
+                .onFailure { message = it.message ?: "Не удалось отправить запрос" }
+            busyAsk = false
         }
+    }
+
+    companion object {
+        @Volatile
+        var visible: Boolean = false
     }
 }

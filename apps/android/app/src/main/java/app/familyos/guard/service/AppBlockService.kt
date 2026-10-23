@@ -6,8 +6,6 @@ import android.content.pm.PackageManager
 import android.view.accessibility.AccessibilityEvent
 import app.familyos.guard.LockActivity
 import app.familyos.guard.data.GuardStore
-import app.familyos.guard.data.Policy
-import java.time.LocalTime
 
 /**
  * Блокирует приложения по лимиту и расписанию.
@@ -35,11 +33,13 @@ class AppBlockService : AccessibilityService() {
         val packageName = event.packageName?.toString() ?: return
         if (packageName == this.packageName || packageName in allowedPackages) return
 
+        if (LockActivity.visible) return
+
         val policy = store.policy() ?: return
-        if (!shouldBlock(policy, LocalTime.now())) return
+        if (policy.blockReasonAt() == null) return
 
         val now = System.currentTimeMillis()
-        if (now - lastBlockAt < 3_000) return
+        if (now - lastBlockAt < 5_000) return
         lastBlockAt = now
 
         val intent = Intent(this, LockActivity::class.java).apply {
@@ -49,22 +49,6 @@ class AppBlockService : AccessibilityService() {
     }
 
     override fun onInterrupt() = Unit
-
-    private fun shouldBlock(policy: Policy, now: LocalTime): Boolean {
-        if (policy.limitMinutes > 0 && policy.usedMinutes >= policy.limitMinutes) return true
-        return isBedtime(policy.bedtimeStart, policy.bedtimeEnd, now)
-    }
-
-    private fun isBedtime(start: String, end: String, now: LocalTime): Boolean {
-        val from = parseTime(start) ?: return false
-        val to = parseTime(end) ?: return false
-        return if (from <= to) now >= from && now < to else now >= from || now < to
-    }
-
-    private fun parseTime(value: String): LocalTime? = runCatching {
-        val parts = value.split(":")
-        LocalTime.of(parts[0].toInt(), parts[1].toInt())
-    }.getOrNull()
 
     private fun buildAllowlist(): Set<String> {
         val result = mutableSetOf(

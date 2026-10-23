@@ -2,6 +2,7 @@ package app.familyos.guard.data
 
 import android.content.Context
 import org.json.JSONObject
+import java.time.LocalTime
 
 class GuardStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("guard", Context.MODE_PRIVATE)
@@ -23,6 +24,13 @@ class GuardStore(context: Context) {
 
     fun policy(): Policy? = policyJson?.let { raw ->
         runCatching { Policy.fromJson(raw) }.getOrNull()
+    }
+
+    fun configure(url: String, deviceKey: String) {
+        prefs.edit()
+            .putString(KEY_URL, url.trim().trimEnd('/'))
+            .putString(KEY_TOKEN, deviceKey.trim())
+            .apply()
     }
 
     fun savePolicyBody(body: String) {
@@ -51,6 +59,24 @@ data class Policy(
     val bedtimeEnd: String,
     val webFilter: Boolean,
 ) {
+    /** Причина блокировки на текущий момент: limit, bedtime или null. */
+    fun blockReasonAt(now: LocalTime = LocalTime.now()): String? {
+        if (limitMinutes > 0 && usedMinutes >= limitMinutes) return "limit"
+        if (isBedtime(now)) return "bedtime"
+        return null
+    }
+
+    fun isBedtime(now: LocalTime = LocalTime.now()): Boolean {
+        val from = parseTime(bedtimeStart) ?: return false
+        val to = parseTime(bedtimeEnd) ?: return false
+        return if (from <= to) now >= from && now < to else now >= from || now < to
+    }
+
+    private fun parseTime(value: String): LocalTime? = runCatching {
+        val parts = value.split(":")
+        LocalTime.of(parts[0].toInt(), parts[1].toInt())
+    }.getOrNull()
+
     companion object {
         fun fromJson(raw: String): Policy {
             val data = JSONObject(raw)

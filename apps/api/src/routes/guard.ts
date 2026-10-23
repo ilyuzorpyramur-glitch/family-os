@@ -5,6 +5,7 @@ import type { Ctx } from "./api.js";
 import { localDateISO } from "../lib/time.js";
 import {
   addEvent,
+  currentBlockReason,
   createChild,
   createDevice,
   createExtensionRequest,
@@ -145,6 +146,7 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
         policy,
         limitMinutes: effectiveLimit(policy, today),
         usedMinutes: usage.minutes,
+        blockReason: currentBlockReason(policy, usage.minutes),
         remainMinutes: Math.max(0, effectiveLimit(policy, today) - usage.minutes),
         serverTime: new Date().toISOString(),
       },

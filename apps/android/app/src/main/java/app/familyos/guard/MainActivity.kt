@@ -81,6 +81,12 @@ class MainActivity : ComponentActivity() {
         store = GuardStore(this)
         GuardNotifications.ensureChannel(this)
 
+        val extraUrl = intent?.getStringExtra("server_url")
+        val extraKey = intent?.getStringExtra("device_token")
+        if (!extraUrl.isNullOrBlank() && !extraKey.isNullOrBlank()) {
+            store.configure(extraUrl, extraKey)
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED
@@ -133,8 +139,7 @@ class MainActivity : ComponentActivity() {
             message = "Заполните адрес сервера и токен"
             return
         }
-        store.serverUrl = url
-        store.token = key
+        store.configure(url, key)
         message = null
         refresh()
     }

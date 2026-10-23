@@ -264,6 +264,37 @@ export function decideExtensionRequest(
   return db.prepare("SELECT * FROM extension_requests WHERE id = ?").get(id) as ExtensionRequestRow;
 }
 
+
+export function currentBlockReason(
+  policy: PolicyRow,
+  usedMinutes: number,
+  now: Date = new Date(),
+  timeZone: string = process.env.TZ ?? "Europe/Warsaw",
+): "limit" | "bedtime" | null {
+  if (policy.screen_limit_min > 0 && usedMinutes >= policy.screen_limit_min) return "limit";
+
+  const hhmm = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+  const minutesNow = toMinutes(hhmm);
+  const from = toMinutes(policy.bedtime_start);
+  const to = toMinutes(policy.bedtime_end);
+  if (minutesNow == null || from == null || to == null) return null;
+  const bedtime = from <= to ? minutesNow >= from && minutesNow < to : minutesNow >= from || minutesNow < to;
+  return bedtime ? "bedtime" : null;
+}
+
+function toMinutes(value: string): number | null {
+  const [h, m] = value.split(":");
+  const hours = Number(h);
+  const minutes = Number(m);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
 export type GuardOverview = {
   date: string;
   children: {
