@@ -220,7 +220,6 @@ fun ProfileScreen(
         }
 
         Avatar(profile?.avatarUrl, 104)
-        TextButton(onClick = onPickAvatar, enabled = !busy) { Text("Изменить фото") }
         Text(profile?.name ?: "Ребёнок", fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text(
             profile?.let { "Уровень ${it.level} · ${it.xp} XP · ${it.coins} монет" } ?: "",
@@ -229,42 +228,15 @@ fun ProfileScreen(
         )
 
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(16.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Данные", fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(10.dp))
-                OutlinedTextField(
-                    value = nickname,
-                    onValueChange = { nickname = it },
-                    label = { Text("Никнейм") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = school,
-                    onValueChange = { school = it },
-                    label = { Text("Школа") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = grade,
-                    onValueChange = { grade = it },
-                    label = { Text("Класс") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                profile?.birthDate?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text("Дата рождения: $it", color = Muted, fontSize = 12.sp)
-                }
-                Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = { onSave(nickname, school, grade) },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Сохранить") }
+                Text("Имя: ${profile?.name ?: "—"}")
+                Text("Никнейм: ${profile?.nickname ?: "—"}", color = Muted)
+                Text("Школа: ${profile?.school ?: "—"}", color = Muted)
+                Text("Класс: ${profile?.grade ?: "—"}", color = Muted)
+                profile?.birthDate?.let { Text("Дата рождения: $it", color = Muted) }
+                Spacer(Modifier.height(4.dp))
+                Text("Данные заполняет родитель в панели Family OS.", color = Muted, fontSize = 12.sp)
             }
         }
 

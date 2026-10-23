@@ -40,6 +40,7 @@ data class QuestItem(
     val coins: Int,
     val stat: String?,
     val status: String,
+    val shared: Boolean,
     val approval: String,
     val photosRequired: Int,
     val photos: List<String>,
@@ -54,6 +55,7 @@ data class QuestItem(
             coins = o.optInt("coins", 0),
             stat = if (o.isNull("stat")) null else o.optString("stat").ifBlank { null },
             status = o.optString("status", "active"),
+            shared = o.optInt("shared", 0) == 1,
             approval = o.optString("approval", "parent"),
             photosRequired = o.optInt("photos_required", 0),
             photos = o.optJSONArray("photos")?.let { arr ->

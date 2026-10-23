@@ -180,6 +180,7 @@ class MainActivity : ComponentActivity() {
                                         busy = busy,
                                         message = message,
                                         onComplete = { id, photos -> startQuest(id, photos) },
+                                        onClaim = { claimQuest(it) },
                                         onRefresh = { refresh() },
                                     )
                                     2 -> ShopScreen(
@@ -232,6 +233,7 @@ class MainActivity : ComponentActivity() {
                             initialUrl = state.serverUrl,
                             message = message,
                             onSave = { url, token -> saveConfig(url, token) },
+                            onParent = { startActivity(Intent(this@MainActivity, ParentActivity::class.java)) },
                         )
                     }
                 }
@@ -326,6 +328,19 @@ class MainActivity : ComponentActivity() {
             }.onFailure {
                 message = it.message
             }
+            busy = false
+        }
+    }
+
+    private fun claimQuest(questId: String) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                api.claimQuest(questId)
+                quests = api.quests()
+                home = api.home()
+            }.onSuccess { message = "Задание твоё" }.onFailure { message = it.message }
             busy = false
         }
     }
@@ -504,7 +519,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Setup(initialUrl: String, message: String?, onSave: (String, String) -> Unit) {
+private fun Setup(
+    initialUrl: String,
+    message: String?,
+    onSave: (String, String) -> Unit,
+    onParent: () -> Unit,
+) {
     var url by remember { mutableStateOf(initialUrl) }
     var token by remember { mutableStateOf("") }
 
@@ -542,7 +562,11 @@ private fun Setup(initialUrl: String, message: String?, onSave: (String, String)
         )
         Spacer(Modifier.height(20.dp))
         Button(onClick = { onSave(url, token) }, modifier = Modifier.fillMaxWidth()) {
-            Text("Подключить")
+            Text("Подключить как ребёнок")
+        }
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = onParent, modifier = Modifier.fillMaxWidth()) {
+            Text("Я родитель")
         }
 
         message?.let {

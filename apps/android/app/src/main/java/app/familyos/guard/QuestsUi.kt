@@ -41,6 +41,7 @@ fun QuestsScreen(
     busy: Boolean,
     message: String?,
     onComplete: (String, Boolean) -> Unit,
+    onClaim: (String) -> Unit,
     onRefresh: () -> Unit,
 ) {
     Column(
@@ -76,7 +77,7 @@ fun QuestsScreen(
             Text("Новых заданий нет.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             active.forEach { quest ->
-                QuestCard(quest, busy) { id, photos -> onComplete(id, photos) }
+                QuestCard(quest, busy, onComplete, onClaim)
             }
         }
 
@@ -168,7 +169,12 @@ private fun StatChip(label: String, value: Int) {
 }
 
 @Composable
-private fun QuestCard(quest: QuestItem, busy: Boolean, onComplete: (String, Boolean) -> Unit) {
+private fun QuestCard(
+    quest: QuestItem,
+    busy: Boolean,
+    onComplete: (String, Boolean) -> Unit,
+    onClaim: (String) -> Unit,
+) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp)) {
             Text(quest.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -183,14 +189,20 @@ private fun QuestCard(quest: QuestItem, busy: Boolean, onComplete: (String, Bool
                 fontSize = 12.sp,
             )
             Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = { onComplete(quest.id, quest.photosRequired > 0) },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(
-                    if (quest.photosRequired > 0) "Добавить фото (${quest.photosRequired})" else "Выполнено",
-                )
+            if (quest.shared) {
+                Button(
+                    onClick = { onClaim(quest.id) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Взять задание") }
+            } else {
+                Button(
+                    onClick = { onComplete(quest.id, quest.photosRequired > 0) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (quest.photosRequired > 0) "Добавить фото (${quest.photosRequired})" else "Выполнено")
+                }
             }
         }
     }

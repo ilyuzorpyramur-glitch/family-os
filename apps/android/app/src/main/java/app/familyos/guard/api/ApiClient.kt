@@ -58,6 +58,11 @@ class ApiClient(private val store: GuardStore) {
         QuestData.fromJson(call("GET", "/api/device/quests", null))
     }
 
+    suspend fun claimQuest(questId: String) = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/quests/$questId/claim", JSONObject())
+        Unit
+    }
+
     suspend fun completeQuest(questId: String, images: List<String> = emptyList()) = withContext(Dispatchers.IO) {
         if (images.isNotEmpty()) {
             val body = JSONObject().put("images", JSONArray(images))
