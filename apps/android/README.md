@@ -1,39 +1,68 @@
-# apps/android
+# apps/android — Family OS Guard
 
-Android-приложение: два режима в одной кодовой базе — родитель и ребёнок.
+Android-клиент родительского контроля. Собирается **только в GitHub Actions**:
+`.github/workflows/android.yml` → артефакт `family-os-guard-debug`.
 
-## Модули Gradle (план)
+## Что умеет (0.1.0)
+
+- Привязка к серверу по адресу и токену устройства (выдаётся в панели Guard один раз).
+- Получение политики: дневной лимит, отбой/подъём, флаг веб-фильтра.
+- Отправка статистики использования (`UsageStatsManager`) каждые 15 минут через WorkManager.
+- Блокировка приложений по лимиту и расписанию через AccessibilityService.
+- Экран блокировки с запросом «+15 минут» и авто-разблокировкой после одобрения.
+- Device Admin (защита от удаления — при наличии Device Owner).
+- Уведомление при достижении лимита.
+
+## Установка
+
+1. Скачайте APK из последнего успешного запуска workflow (**Actions → Android APK → Artifacts**).
+2. `adb install -r app-debug.apk` или откройте файл на телефоне.
+3. В панели родителя: **Guard → ребёнок → Привязать** → скопируйте токен.
+4. В приложении: адрес сервера (`https://family.example.com`) и токен → «Подключить».
+5. Выдайте доступы на главном экране:
+   - **Статистика использования** — обязательно для лимитов.
+   - **Специальные возможности** — обязательно для блокировки приложений.
+   - **Device Admin** — рекомендуется; полная защита от удаления требует Device Owner.
+
+## Device Owner
+
+На чистом устройстве (сразу после сброса, до добавления Google-аккаунта):
+
+```bash
+adb shell dpm set-device-owner app.familyos.guard/.admin.GuardDeviceAdmin
+```
+
+Или QR-provisioning из панели (появится позже). Без Device Owner приложение можно удалить —
+лимиты работать перестанут.
+
+## Проверка
+
+- На главном экране отображается «использовано / лимит» и остаток.
+- Кнопка «Обновить» тянет политику с сервера.
+- При достижении лимита открывается экран блокировки; «+15 минут» создаёт запрос,
+  который виден в панели родителя.
+- В панели в карточке ребёнка появляются минуты и устройство «на связи».
+
+## Ограничения текущей версии
+
+- Нет VPN/DNS-фильтра — поле `web_filter` только хранится.
+- Нет геозон и SOS (серверная схема готова).
+- Статистика обновляется раз в 15 минут; блокировка использует последнее известное значение.
+- Нет push-уведомлений родителю (только панель).
+- Debug-подпись; для распространения нужен release-keystore и подпись в CI.
+- Google Play ограничивает Accessibility-блокировки; для семейного сайдлоада это допустимо.
+
+## Структура
 
 ```
-:app            точка входа, навигация, DI
-:core:data      Room, сетевой слой, синхронизация
-:core:ui        дизайн-система, компоненты
-:feature:money  быстрый ввод, счета, бюджеты
-:feature:pantry штрихкоды, остатки, покупки
-:feature:food   дневник, сканер, рецепты
-:feature:quest  задания, XP
-:feature:guard  Device Owner, UsageStats, VPN-фильтр, геозоны
+app/src/main/java/app/familyos/guard/
+  MainActivity.kt        настройка, дашборд, доступы
+  LockActivity.kt        экран блокировки и запрос времени
+  GuardApp.kt            планировщик WorkManager
+  api/ApiClient.kt       HTTP-клиент устройства
+  data/GuardStore.kt     настройки и кэш политики
+  data/UsageCollector.kt UsageStatsManager
+  service/AppBlockService.kt  AccessibilityService
+  work/GuardSyncWorker.kt     синхронизация каждые 15 минут
+  admin/GuardDeviceAdmin.kt   Device Admin receiver
 ```
-
-## Ключевые технологии
-
-- Kotlin 2.x, Compose, Material 3.
-- Room + WorkManager (оффлайн-очередь и синхронизация).
-- Hilt, Retrofit/Ktor Client, kotlinx.serialization.
-- ML Kit Barcode Scanning (bundled model — работает оффлайн).
-- DevicePolicyManager, UsageStatsManager, VpnService, GeofencingClient.
-
-## Разрешения и доступы
-
-| Доступ | Зачем | Как получаем |
-|---|---|---|
-| Device Owner | лимиты, запрет удаления | QR/ADB provisioning |
-| Usage Access | экранное время | настройки, ведём пользователя |
-| Accessibility | блокировка приложений (fallback) | явное согласие |
-| VPN | DNS-фильтрация | consent-диалог |
-| Location (background) | геозоны | разрешение + уведомление |
-| Notifications | лимиты, SOS | runtime |
-
-## Статус
-
-M0: проект не создан. M1 — экран быстрого ввода траты + оффлайн-очередь.
