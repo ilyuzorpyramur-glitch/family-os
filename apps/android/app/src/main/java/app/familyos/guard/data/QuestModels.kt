@@ -45,7 +45,7 @@ data class QuestItem(
         fun fromJson(o: JSONObject): QuestItem = QuestItem(
             id = o.optString("id"),
             title = o.optString("title"),
-            description = o.optString("description").ifBlank { null },
+            description = if (o.isNull("description")) null else o.optString("description").ifBlank { null },
             kind = o.optString("kind", "once"),
             xp = o.optInt("xp", 0),
             coins = o.optInt("coins", 0),
@@ -101,7 +101,7 @@ data class ShopItem(
         fun fromJson(o: JSONObject): ShopItem = ShopItem(
             id = o.optString("id"),
             title = o.optString("title"),
-            description = o.optString("description").ifBlank { null },
+            description = if (o.isNull("description")) null else o.optString("description").ifBlank { null },
             priceCoins = o.optInt("price_coins", 0),
             stock = if (o.isNull("stock")) null else o.optInt("stock"),
         )

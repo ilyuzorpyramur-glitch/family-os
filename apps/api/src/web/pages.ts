@@ -304,7 +304,9 @@ export function settingsPage(data: SettingsData): string {
         <p class="sub">Статус агентского токена: ${data.agentTokenConfigured ? "задан" : "не задан (используется admin-токен)"}.</p>
         <p class="sub">Инструменты: <code>accounts_list</code>, <code>money_summary</code>,
         <code>transactions_list</code>, <code>categories_list</code>, <code>add_transaction</code>, <code>sync_now</code>,
-        <code>guard_overview</code>, <code>guard_events</code>, <code>guard_set_limit</code>, <code>guard_approve_request</code>.</p>
+        <code>guard_overview</code>, <code>guard_events</code>, <code>guard_set_limit</code>, <code>guard_approve_request</code>,
+        <code>quest_list</code>, <code>quest_create</code>, <code>quest_approve</code>,
+        <code>shop_list</code>, <code>shop_add</code>, <code>purchase_decide</code>.</p>
       </section>
 
       <section class="card">

@@ -4,9 +4,9 @@
 питание и геймификация — с агентом OpenClaw, который всё это связывает,
 автоматизирует и объясняет.
 
-> **Статус: M1 (деньги) + Guard (сервер и Android).** Работает учёт денег из Zen Money,
-> веб-панель, MCP для OpenClaw, серверный родительский контроль и Android-клиент Guard
-> (APK собирается в GitHub Actions). Модули Pantry/Nutrition/Quest — спроектированы.
+> **Статус: M1 (деньги) + Guard + Quest.** Работает учёт денег из Zen Money, веб-панель,
+> MCP для OpenClaw, родительский контроль и геймификация: задания, уровни, характеристики,
+> монеты и магазин наград с подтверждением покупок. Pantry/Nutrition — спроектированы.
 
 ## Что уже работает
 
@@ -17,9 +17,11 @@
 - **Guard (Android)** — APK в артефактах GitHub Actions: лимиты, bedtime, блокировка через
   Accessibility, запрос «+15 минут», отправка статистики каждые 15 минут. Инструкция —
   [apps/android/README.md](apps/android/README.md).
-- **MCP для OpenClaw** — `accounts_list`, `money_summary`, `transactions_list`,
-  `categories_list`, `add_transaction`, `sync_now`, `guard_overview`, `guard_events`,
-  `guard_set_limit`, `guard_approve_request`. Все вызовы аудируются.
+- **Quest (геймификация)** — задания от родителя или OpenClaw, XP, уровни, характеристики,
+  монеты, магазин наград. Покупка создаёт запрос родителю, монеты списываются после одобрения.
+- **MCP для OpenClaw** — деньги, Guard и Quest: `accounts_list`, `money_summary`,
+  `guard_set_limit`, `quest_create`, `quest_approve`, `shop_add`, `purchase_decide` и др.
+  Все вызовы аудируются.
 - **Self-hosted** — один контейнер, SQLite в томе, без внешних зависимостей кроме Zen Money.
 
 ## Быстрый старт (Docker)
@@ -44,7 +46,7 @@ ADMIN_TOKEN=dev-token FAMILYOS_DATA_DIR=./data npm run dev
 # http://localhost:3001
 ```
 
-Тесты: `npm test` (7 тестов: API, MCP, импорт, двойная запись, сводка, Guard, Guard MCP).
+Тесты: `npm test` (9 тестов: API, MCP, импорт, двойная запись, сводка, Guard, Guard MCP, Quest, Shop).
 
 ## Подключение OpenClaw
 
@@ -97,7 +99,7 @@ docs/           продукт, архитектура, модель данны�
 | Guard (родительский контроль) | сервер и Android-клиент; фильтр веба и геозоны — далее |
 | Pantry (запасы, Grocy-подобно) | дизайн: [docs/modules/PANTRY.md](docs/modules/PANTRY.md) |
 | Nutrition (калории, штрихкоды) | дизайн: [docs/modules/NUTRITION.md](docs/modules/NUTRITION.md) |
-| Quest (XP, задания, награды) | дизайн: [docs/modules/QUEST.md](docs/modules/QUEST.md) |
+| Quest (XP, задания, награды) | сервер и Android: задания, уровни, магазин |
 | Copilot (OpenClaw, MCP, Telegram) | MCP работает; Telegram — далее |
 
 ## Безопасность
