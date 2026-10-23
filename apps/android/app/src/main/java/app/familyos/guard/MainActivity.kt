@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -667,6 +668,7 @@ private fun Dashboard(
     onAdmin: () -> Unit,
     onReset: () -> Unit,
 ) {
+    val context = LocalContext.current
     val policy = state.policy
     val fraction = if (policy != null && policy.limitMinutes > 0) {
         (policy.usedMinutes.toFloat() / policy.limitMinutes).coerceIn(0f, 1f)
@@ -772,7 +774,7 @@ private fun Dashboard(
                     }
                     Button(
                         onClick = {
-                            val clipboard = getSystemService(ClipboardManager::class.java)
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
                             clipboard.setPrimaryClip(
                                 ClipData.newPlainText(
                                     "device owner",
