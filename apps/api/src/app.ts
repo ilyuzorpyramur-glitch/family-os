@@ -5,6 +5,7 @@ import type { Config } from "./config.js";
 import type { DB } from "./db.js";
 import { seedCategories } from "./repo/categories.js";
 import { registerApi } from "./routes/api.js";
+import { registerGuardApi } from "./routes/guard.js";
 import { registerWeb } from "./routes/web.js";
 import { registerMcp } from "./mcp/server.js";
 
@@ -27,6 +28,7 @@ export async function buildApp({ config, db, logger = false }: AppOptions): Prom
   seedCategories(db);
 
   registerApi(app, { config, db });
+  registerGuardApi(app, { config, db });
   registerMcp(app, { config, db });
   registerWeb(app, { config, db });
 

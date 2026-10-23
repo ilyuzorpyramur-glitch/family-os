@@ -6,6 +6,7 @@ import { isValidISODate, monthStartISO, todayISO } from "../lib/time.js";
 import { listAccounts } from "../repo/accounts.js";
 import { listCategories } from "../repo/categories.js";
 import { balanceByCurrency, listTransactions, saveTransaction, summaryByCurrency } from "../repo/transactions.js";
+import { decideExtensionRequest, effectiveLimit, ensurePolicy, guardOverview, listChildren, listEvents, updatePolicy } from "../repo/guard.js";
 import { getZenMoneyToken } from "../repo/settings.js";
 import { syncState, syncZenMoney } from "../zenmoney/sync.js";
 import type { Ctx } from "../routes/api.js";
@@ -81,6 +82,49 @@ const TOOLS = [
     name: "sync_now",
     description: "Синхронизировать счета и операции с Zen Money.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "guard_overview",
+    description: "Семейный контроль: дети, лимиты экранного времени, использовано сегодня, запросы времени.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "guard_events",
+    description: "Последние события Guard: лимиты, запросы, SOS, геозоны, попытки обхода.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        childId: { type: "string" },
+        limit: { type: "integer", minimum: 1, maximum: 100 },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "guard_set_limit",
+    description: "Изменить дневной лимит экранного времени ребёнка (минуты). Действие аудируется.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        childId: { type: "string" },
+        screenLimitMin: { type: "integer", minimum: 0, maximum: 1440 },
+      },
+      required: ["childId", "screenLimitMin"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "guard_approve_request",
+    description: "Одобрить запрос ребёнка на дополнительное время. Без minutes — одобрить запрошенное.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        requestId: { type: "string" },
+        minutes: { type: "integer", minimum: 1, maximum: 240 },
+      },
+      required: ["requestId"],
+      additionalProperties: false,
+    },
   },
 ];
 
@@ -288,6 +332,42 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
         if (!token) throw new Error("Zen Money не подключён: нет токена");
         const stats = await syncZenMoney(db, token, config.baseCurrency);
         return stats;
+      }
+
+      case "guard_overview":
+        return guardOverview(db);
+
+      case "guard_events": {
+        const events = listEvents(db, args.childId as string | undefined, typeof args.limit === "number" ? args.limit : 30);
+        return {
+          events: events.map((e) => ({
+            id: e.id,
+            childId: e.child_id,
+            kind: e.kind,
+            payload: e.payload ? JSON.parse(e.payload) : null,
+            occurredAt: e.occurred_at,
+          })),
+        };
+      }
+
+      case "guard_set_limit": {
+        const childId = String(args.childId ?? "");
+        const minutes = Number(args.screenLimitMin);
+        if (!childId || !Number.isFinite(minutes) || minutes < 0 || minutes > 1440) {
+          throw new Error("Нужны childId и screenLimitMin 0..1440");
+        }
+        const child = listChildren(db).find((c) => c.id === childId);
+        if (!child) throw new Error("Ребёнок не найден");
+        const policy = updatePolicy(db, childId, { screenLimitMin: Math.round(minutes) });
+        return { child: child.name, policy, effectiveLimit: effectiveLimit(policy) };
+      }
+
+      case "guard_approve_request": {
+        const requestId = String(args.requestId ?? "");
+        if (!requestId) throw new Error("Нужен requestId");
+        const minutes = typeof args.minutes === "number" ? args.minutes : undefined;
+        const request = decideExtensionRequest(db, requestId, true, "agent", minutes);
+        return { request, policy: ensurePolicy(db, request.child_id) };
       }
 
       default:

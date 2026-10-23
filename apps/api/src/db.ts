@@ -97,6 +97,106 @@ CREATE TABLE IF NOT EXISTS bank_connections (
   last_sync_at  TEXT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Guard: родительский контроль
+
+CREATE TABLE IF NOT EXISTS children (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  birth_date TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS devices (
+  id           TEXT PRIMARY KEY,
+  child_id     TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  platform     TEXT NOT NULL DEFAULT 'android',
+  token_hash   TEXT NOT NULL UNIQUE,
+  push_token   TEXT,
+  status       TEXT NOT NULL DEFAULT 'active',
+  last_seen_at TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS guard_policies (
+  child_id         TEXT PRIMARY KEY REFERENCES children(id) ON DELETE CASCADE,
+  screen_limit_min INTEGER NOT NULL DEFAULT 120,
+  bedtime_start    TEXT NOT NULL DEFAULT '21:00',
+  bedtime_end      TEXT NOT NULL DEFAULT '07:00',
+  web_filter       INTEGER NOT NULL DEFAULT 1,
+  filter_level     TEXT NOT NULL DEFAULT 'balanced',
+  allow_install    INTEGER NOT NULL DEFAULT 0,
+  extra_minutes    INTEGER NOT NULL DEFAULT 0,
+  extra_date       TEXT,
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS app_rules (
+  id         TEXT PRIMARY KEY,
+  child_id   TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  package_id TEXT NOT NULL,
+  label      TEXT,
+  mode       TEXT NOT NULL DEFAULT 'limit',
+  limit_min  INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (child_id, package_id)
+);
+
+CREATE TABLE IF NOT EXISTS guard_events (
+  id          TEXT PRIMARY KEY,
+  child_id    TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  device_id   TEXT,
+  kind        TEXT NOT NULL,
+  payload     TEXT,
+  occurred_at TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_guard_events_child ON guard_events(child_id, occurred_at DESC);
+
+CREATE TABLE IF NOT EXISTS extension_requests (
+  id         TEXT PRIMARY KEY,
+  child_id   TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  device_id  TEXT,
+  minutes    INTEGER NOT NULL,
+  reason     TEXT,
+  status     TEXT NOT NULL DEFAULT 'pending',
+  decided_by TEXT,
+  decided_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_extension_status ON extension_requests(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS usage_daily (
+  child_id   TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  date       TEXT NOT NULL,
+  minutes    INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (child_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS usage_apps (
+  child_id   TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  date       TEXT NOT NULL,
+  package_id TEXT NOT NULL,
+  label      TEXT,
+  minutes    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (child_id, date, package_id)
+);
+
+CREATE TABLE IF NOT EXISTS geofences (
+  id           TEXT PRIMARY KEY,
+  child_id     TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  label        TEXT NOT NULL,
+  lat          REAL NOT NULL,
+  lng          REAL NOT NULL,
+  radius_m     INTEGER NOT NULL DEFAULT 150,
+  notify_enter INTEGER NOT NULL DEFAULT 1,
+  notify_exit  INTEGER NOT NULL DEFAULT 1,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 export function openDb(file: string): DB {

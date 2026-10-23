@@ -6,8 +6,17 @@ import { listAccounts } from "../repo/accounts.js";
 import { balanceByCurrency, listTransactions, summaryByCurrency } from "../repo/transactions.js";
 import { deleteSetting, getSetting, getZenMoneyToken, maskToken, setZenMoneyToken } from "../repo/settings.js";
 import { syncState, syncZenMoney } from "../zenmoney/sync.js";
-import { dashboardPage, docsPage, loginPage, settingsPage } from "../web/pages.js";
+import { dashboardPage, deviceTokenPage, docsPage, guardPage, loginPage, settingsPage } from "../web/pages.js";
 import type { Ctx } from "./api.js";
+import {
+  createChild,
+  createDevice,
+  decideExtensionRequest,
+  getChild,
+  guardOverview,
+  listEvents,
+  updatePolicy,
+} from "../repo/guard.js";
 
 const MONTHS = [
   "январь",
@@ -129,6 +138,58 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
   app.post("/app/settings/token/delete", { preHandler: requirePage }, async (_request, reply) => {
     deleteSetting(db, "zenmoney.token");
     return reply.redirect("/app/settings?flash=token_deleted");
+  });
+
+  app.get("/app/guard", { preHandler: requirePage }, async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    reply.type("text/html; charset=utf-8");
+    return guardPage(guardOverview(db), listEvents(db, undefined, 30), q.flash ?? null);
+  });
+
+  app.post("/app/guard/children", { preHandler: requirePage }, async (request, reply) => {
+    const body = (request.body ?? {}) as { name?: string };
+    const name = (body.name ?? "").trim();
+    if (!name) return reply.redirect(`/app/guard?flash=${encodeURIComponent("err:Введите имя")}`);
+    createChild(db, name);
+    return reply.redirect("/app/guard?flash=guard_child");
+  });
+
+  app.post("/app/guard/children/:id/policy", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, string | undefined>;
+    if (!getChild(db, id)) return reply.redirect(`/app/guard?flash=${encodeURIComponent("err:Ребёнок не найден")}`);
+
+    const limit = Number(body.screenLimitMin);
+    const timeRe = /^\d{2}:\d{2}$/;
+    updatePolicy(db, id, {
+      screenLimitMin: Number.isFinite(limit) ? Math.max(0, Math.min(1440, Math.round(limit))) : undefined,
+      bedtimeStart: body.bedtimeStart && timeRe.test(body.bedtimeStart) ? body.bedtimeStart : undefined,
+      bedtimeEnd: body.bedtimeEnd && timeRe.test(body.bedtimeEnd) ? body.bedtimeEnd : undefined,
+    });
+    return reply.redirect("/app/guard?flash=guard_policy");
+  });
+
+  app.post("/app/guard/children/:id/devices", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { name?: string };
+    const child = getChild(db, id);
+    if (!child) return reply.redirect(`/app/guard?flash=${encodeURIComponent("err:Ребёнок не найден")}`);
+    const name = (body.name ?? "Телефон").trim() || "Телефон";
+    const created = createDevice(db, id, name);
+    reply.type("text/html; charset=utf-8");
+    return deviceTokenPage(child.name, created.device.name, created.token);
+  });
+
+  app.post("/app/guard/requests/:id/decide", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { approve?: string };
+    const approve = body.approve === "yes";
+    try {
+      decideExtensionRequest(db, id, approve, "parent");
+      return reply.redirect(`/app/guard?flash=${approve ? "guard_approved" : "guard_denied"}`);
+    } catch (error) {
+      return reply.redirect(`/app/guard?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
+    }
   });
 
   app.get("/docs", { preHandler: requirePage }, async (_request, reply) => {

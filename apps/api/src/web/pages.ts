@@ -1,6 +1,7 @@
 import { formatMinor } from "../lib/money.js";
 import type { AccountRow } from "../repo/accounts.js";
 import type { CurrencySummary, TxView } from "../repo/transactions.js";
+import type { GuardEventRow, GuardOverview } from "../repo/guard.js";
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -65,6 +66,16 @@ code { background:var(--panel2); border:1px solid var(--line); padding:2px 6px; 
 .list { display:flex; flex-direction:column; gap:2px; }
 .li { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
 .li:last-child { border-bottom:none; }
+.bar { height:8px; border-radius:999px; background:var(--panel2); border:1px solid var(--line); overflow:hidden; margin:8px 0 4px; }
+.bar > span { display:block; height:100%; background:var(--accent); }
+.bar.warn > span { background:var(--amber); }
+.bar.full > span { background:var(--red); }
+.kv { display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--muted); }
+.split { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); }
+.mini-form { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
+.mini-form .field { margin:0; flex:1 1 90px; }
+.mini-form input { padding:7px 9px; }
+.mini-form button { padding:7px 12px; }
 @media (max-width:640px) {
   .hide-sm { display:none; }
   .big { font-size:24px; }
@@ -76,6 +87,7 @@ function layout(title: string, body: string, opts: { nav?: boolean } = {}): stri
   const nav = opts.nav
     ? `<nav>
         <a href="/app">Обзор</a>
+        <a href="/app/guard">Guard</a>
         <a href="/app/settings">Настройки</a>
         <a href="/docs">MCP</a>
         <form class="inline" method="post" action="/logout"><button class="ghost" type="submit">Выйти</button></form>
@@ -146,6 +158,10 @@ function flashBlock(flash: string | null): string {
     sync: "Синхронизация завершена.",
     token: "Токен сохранён. Нажмите «Синхронизировать».",
     token_deleted: "Токен удалён.",
+    guard_child: "Ребёнок добавлен.",
+    guard_policy: "Политика обновлена.",
+    guard_approved: "Время разрешено.",
+    guard_denied: "Запрос отклонён.",
   };
   if (flash.startsWith("err:")) {
     return `<div class="banner err">${escapeHtml(flash.slice(4))}</div>`;
@@ -279,7 +295,8 @@ export function settingsPage(data: SettingsData): string {
         Авторизация — <code>Authorization: Bearer &lt;AGENT_TOKEN&gt;</code>.</p>
         <p class="sub">Статус агентского токена: ${data.agentTokenConfigured ? "задан" : "не задан (используется admin-токен)"}.</p>
         <p class="sub">Инструменты: <code>accounts_list</code>, <code>money_summary</code>,
-        <code>transactions_list</code>, <code>categories_list</code>, <code>add_transaction</code>, <code>sync_now</code>.</p>
+        <code>transactions_list</code>, <code>categories_list</code>, <code>add_transaction</code>, <code>sync_now</code>,
+        <code>guard_overview</code>, <code>guard_events</code>, <code>guard_set_limit</code>, <code>guard_approve_request</code>.</p>
       </section>
 
       <section class="card">
@@ -292,8 +309,7 @@ export function settingsPage(data: SettingsData): string {
   );
 }
 
-export function docsPage(publicUrl: string): string {
-  return layout(
+export function docsPage(publicUrl: string): string {  return layout(
     "MCP",
     `<main>
       <section class="card">
@@ -316,6 +332,143 @@ export function docsPage(publicUrl: string): string {
           <div class="li"><span><code>add_transaction</code><div class="sub">Добавить расход/доход/перевод (с аудитом)</div></span></div>
           <div class="li"><span><code>sync_now</code><div class="sub">Синхронизация с Zen Money</div></span></div>
         </div>
+      </section>
+    </main>`,
+    { nav: true },
+  );
+}
+
+function minutesLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? `${h} ч ${m} мин` : `${m} мин`;
+}
+
+export function guardPage(
+  data: GuardOverview,
+  events: GuardEventRow[],
+  flash: string | null,
+): string {
+  const cards = data.children.length
+    ? data.children
+        .map((child) => {
+          const pct = child.limitMinutes > 0 ? Math.min(100, Math.round((child.usedMinutes / child.limitMinutes) * 100)) : 100;
+          const barClass = pct >= 100 ? "bar full" : pct >= 80 ? "bar warn" : "bar";
+          const requests = child.pendingRequests.length
+            ? child.pendingRequests
+                .map(
+                  (r) => `<div class="li">
+                    <span>+${r.minutes} мин${r.reason ? `<div class="sub">${escapeHtml(r.reason)}</div>` : ""}</span>
+                    <span>
+                      <form class="inline" method="post" action="/app/guard/requests/${escapeHtml(r.id)}/decide">
+                        <input type="hidden" name="approve" value="yes"><button type="submit">Разрешить</button>
+                      </form>
+                      <form class="inline" method="post" action="/app/guard/requests/${escapeHtml(r.id)}/decide">
+                        <input type="hidden" name="approve" value="no"><button class="ghost" type="submit">Отклонить</button>
+                      </form>
+                    </span>
+                  </div>`,
+                )
+                .join("")
+            : `<div class="sub">Нет активных запросов.</div>`;
+
+          const devices = child.devices.length
+            ? child.devices
+                .map(
+                  (d) => `<div class="li"><span>${escapeHtml(d.name)}</span><span class="sub">${
+                    d.lastSeenAt ? "на связи " + escapeHtml(d.lastSeenAt) + " UTC" : "ещё не подключалось"
+                  }</span></div>`,
+                )
+                .join("")
+            : `<div class="sub">Устройство не привязано.</div>`;
+
+          return `<section class="card">
+            <div class="section-head">
+              <h2>${escapeHtml(child.name)}</h2>
+              <span class="tag">${minutesLabel(child.usedMinutes)} из ${minutesLabel(child.limitMinutes)}</span>
+            </div>
+            <div class="${barClass}"><span style="width:${pct}%"></span></div>
+            <div class="kv"><span>Осталось сегодня: ${minutesLabel(child.remainingMinutes)}</span><span>${pct}%</span></div>
+
+            <form method="post" action="/app/guard/children/${escapeHtml(child.id)}/policy" style="margin-top:14px">
+              <div class="mini-form">
+                <div class="field"><label>Лимит, мин</label><input type="number" name="screenLimitMin" min="0" max="1440" value="${child.policy.screen_limit_min}"></div>
+                <div class="field"><label>Отбой</label><input type="text" name="bedtimeStart" pattern="\\d{2}:\\d{2}" value="${escapeHtml(child.policy.bedtime_start)}"></div>
+                <div class="field"><label>Подъём</label><input type="text" name="bedtimeEnd" pattern="\\d{2}:\\d{2}" value="${escapeHtml(child.policy.bedtime_end)}"></div>
+                <button type="submit">Сохранить</button>
+              </div>
+            </form>
+
+            <h3 style="margin-top:16px">Запросы времени</h3>
+            ${requests}
+
+            <h3 style="margin-top:16px">Устройства</h3>
+            ${devices}
+            <form class="mini-form" method="post" action="/app/guard/children/${escapeHtml(child.id)}/devices" style="margin-top:10px">
+              <div class="field"><label>Название телефона</label><input name="name" placeholder="Телефон Алисы" required></div>
+              <button type="submit">Привязать</button>
+            </form>
+          </section>`;
+        })
+        .join("")
+    : `<section class="card"><h2>Дети</h2><p class="sub">Пока никого нет. Добавьте ребёнка, чтобы настроить лимиты.</p></section>`;
+
+  const eventRows = events.length
+    ? events
+        .map(
+          (e) => `<tr>
+            <td class="muted">${escapeHtml(e.occurred_at.slice(0, 16).replace("T", " "))}</td>
+            <td>${escapeHtml(e.kind)}</td>
+            <td class="muted hide-sm">${escapeHtml(e.payload ?? "")}</td>
+          </tr>`,
+        )
+        .join("")
+    : "";
+
+  return layout(
+    "Guard",
+    `<main>
+      ${flashBlock(flash)}
+      <div class="banner">
+        Серверная часть Guard готова: политики, лимиты, запросы времени и события устройств.
+        Android-приложение (Device Owner, UsageStats, фильтр) — следующий шаг. Протокол устройства:
+        <code>docs/GUARD-DEVICE-API.md</code>.
+      </div>
+      <div class="split">${cards}</div>
+
+      <section class="card">
+        <div class="section-head"><h2>Добавить ребёнка</h2></div>
+        <form class="mini-form" method="post" action="/app/guard/children">
+          <div class="field"><label>Имя</label><input name="name" placeholder="Алиса" required></div>
+          <button type="submit">Добавить</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="section-head"><h2>События</h2><span class="tag">${escapeHtml(data.date)}</span></div>
+        ${
+          events.length
+            ? `<table><thead><tr><th>Время</th><th>Тип</th><th class="hide-sm">Данные</th></tr></thead><tbody>${eventRows}</tbody></table>`
+            : `<p class="sub">Событий пока нет.</p>`
+        }
+      </section>
+    </main>`,
+    { nav: true },
+  );
+}
+
+export function deviceTokenPage(childName: string, deviceName: string, token: string): string {
+  return layout(
+    "Устройство привязано",
+    `<main>
+      <section class="card">
+        <h2>Токен устройства</h2>
+        <p class="sub">${escapeHtml(childName)} · ${escapeHtml(deviceName)}</p>
+        <p>Вставьте этот токен в приложение Family OS Guard на телефоне. Он показывается один раз —
+        сервер хранит только хеш.</p>
+        <pre style="overflow:auto;background:var(--panel2);padding:12px;border-radius:10px;border:1px solid var(--line)"><code>${escapeHtml(token)}</code></pre>
+        <p class="sub">Дальше: включите Device Owner через QR/ADB, выдайте доступ к Usage Access и уведомлениям.</p>
+        <p><a class="btn" href="/app/guard" style="display:inline-block">Вернуться в Guard</a></p>
       </section>
     </main>`,
     { nav: true },

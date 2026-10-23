@@ -4,9 +4,9 @@
 питание и геймификация — с агентом OpenClaw, который всё это связывает,
 автоматизирует и объясняет.
 
-> **Статус: M1 — деньги.** Сервер работает, тянет счета и операции из Zen Money,
-> показывает дашборд и отдаёт MCP-инструменты OpenClaw. Модули Guard/Pantry/Nutrition/Quest —
-> спроектированы, код впереди.
+> **Статус: M1 (деньги) + Guard-сервер.** Работает учёт денег из Zen Money, веб-панель,
+> MCP для OpenClaw и серверный родительский контроль: дети, лимиты, запросы времени, события.
+> Android-клиент Guard — следующий шаг. Модули Pantry/Nutrition/Quest — спроектированы.
 
 ## Что уже работает
 
@@ -14,8 +14,12 @@
   через официальный API (`api.zenmoney.ru/v8/diff/`) по токену с [zerro.app/token](https://zerro.app/token).
 - **Двойная запись** — каждая операция раскладывается на проводки, сумма которых равна нулю.
 - **Веб-панель** — балансы, итоги месяца, счета и последние операции. Тёмная тема, мобильная вёрстка.
+- **Guard (сервер)** — дети, дневной лимит экрана, bedtime, запросы «+15 минут» с одобрением,
+  события устройств, привязка телефона по токену, панель родителя. Протокол для Android —
+  [docs/GUARD-DEVICE-API.md](docs/GUARD-DEVICE-API.md).
 - **MCP для OpenClaw** — `accounts_list`, `money_summary`, `transactions_list`,
-  `categories_list`, `add_transaction`, `sync_now`. Все вызовы аудируются.
+  `categories_list`, `add_transaction`, `sync_now`, `guard_overview`, `guard_events`,
+  `guard_set_limit`, `guard_approve_request`. Все вызовы аудируются.
 - **Self-hosted** — один контейнер, SQLite в томе, без внешних зависимостей кроме Zen Money.
 
 ## Быстрый старт (Docker)
@@ -40,7 +44,7 @@ ADMIN_TOKEN=dev-token FAMILYOS_DATA_DIR=./data npm run dev
 # http://localhost:3001
 ```
 
-Тесты: `npm test` (5 тестов: API, MCP, импорт, двойная запись, сводка).
+Тесты: `npm test` (7 тестов: API, MCP, импорт, двойная запись, сводка, Guard, Guard MCP).
 
 ## Подключение OpenClaw
 
@@ -90,7 +94,7 @@ docs/           продукт, архитектура, модель данны�
 | Модуль | Статус |
 |---|---|
 | Money (Zen Money, двойная запись, бюджеты) | работает: счета, операции, сводки; бюджеты — далее |
-| Guard (родительский контроль) | дизайн: [docs/modules/GUARD.md](docs/modules/GUARD.md) |
+| Guard (родительский контроль) | сервер работает: лимиты, запросы, события; Android — далее |
 | Pantry (запасы, Grocy-подобно) | дизайн: [docs/modules/PANTRY.md](docs/modules/PANTRY.md) |
 | Nutrition (калории, штрихкоды) | дизайн: [docs/modules/NUTRITION.md](docs/modules/NUTRITION.md) |
 | Quest (XP, задания, награды) | дизайн: [docs/modules/QUEST.md](docs/modules/QUEST.md) |

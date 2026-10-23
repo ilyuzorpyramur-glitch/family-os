@@ -2,6 +2,10 @@ export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+export function localDateISO(date = new Date(), timeZone = process.env.TZ ?? "Europe/Warsaw"): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
+}
+
 export function monthStartISO(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
 }
