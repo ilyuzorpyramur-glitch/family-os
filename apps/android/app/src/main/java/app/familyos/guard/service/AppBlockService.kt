@@ -3,6 +3,7 @@ package app.familyos.guard.service
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import app.familyos.guard.LockActivity
 import app.familyos.guard.data.GuardStore
@@ -12,6 +13,8 @@ import app.familyos.guard.data.GuardStore
  * Не читает содержимое экрана: используется только имя пакета активного окна.
  */
 class AppBlockService : AccessibilityService() {
+
+    private val TAG = "GuardBlock"
 
     private lateinit var store: GuardStore
     private var allowedPackages: Set<String> = emptySet()
@@ -26,6 +29,7 @@ class AppBlockService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         allowedPackages = buildAllowlist()
+        Log.i(TAG, "service connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -36,7 +40,9 @@ class AppBlockService : AccessibilityService() {
         if (LockActivity.visible) return
 
         val policy = store.policy() ?: return
-        if (policy.blockReasonAt() == null) return
+        val reason = policy.blockReasonAt()
+        if (reason == null) return
+        Log.i(TAG, "blocking $packageName, reason=$reason")
 
         val now = System.currentTimeMillis()
         if (now - lastBlockAt < 5_000) return
