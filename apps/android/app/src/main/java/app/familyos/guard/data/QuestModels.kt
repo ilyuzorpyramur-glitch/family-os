@@ -52,7 +52,7 @@ data class QuestItem(
             kind = o.optString("kind", "once"),
             xp = o.optInt("xp", 0),
             coins = o.optInt("coins", 0),
-            stat = o.optString("stat").ifBlank { null },
+            stat = if (o.isNull("stat")) null else o.optString("stat").ifBlank { null },
             status = o.optString("status", "active"),
             approval = o.optString("approval", "parent"),
             photosRequired = o.optInt("photos_required", 0),
@@ -106,6 +106,7 @@ data class ShopItem(
     val description: String?,
     val priceCoins: Int,
     val stock: Int?,
+    val photoUrl: String?,
 ) {
     companion object {
         fun fromJson(o: JSONObject): ShopItem = ShopItem(
@@ -114,6 +115,7 @@ data class ShopItem(
             description = if (o.isNull("description")) null else o.optString("description").ifBlank { null },
             priceCoins = o.optInt("price_coins", 0),
             stock = if (o.isNull("stock")) null else o.optInt("stock"),
+            photoUrl = if (o.isNull("photoUrl")) null else o.optString("photoUrl").ifBlank { null },
         )
     }
 }

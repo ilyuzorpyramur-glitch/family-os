@@ -33,6 +33,7 @@ import app.familyos.guard.data.QuestData
 import app.familyos.guard.data.QuestItem
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.data.ShopItem
+import coil.compose.AsyncImage
 
 @Composable
 fun QuestsScreen(
@@ -336,6 +337,14 @@ private fun ShopItemCard(item: ShopItem, coins: Int, busy: Boolean, onBuy: (Stri
     val canAfford = coins >= item.priceCoins
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp)) {
+            item.photoUrl?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = item.title,
+                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                )
+                Spacer(Modifier.height(6.dp))
+            }
             Text(item.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             item.description?.let {
                 Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
