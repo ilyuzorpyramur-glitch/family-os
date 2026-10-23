@@ -1,0 +1,149 @@
+import type { FastifyInstance } from "fastify";
+import { isAdminCookie, sessionValue } from "../auth.js";
+import { safeEqual } from "../lib/crypto.js";
+import { isValidISODate, monthStartISO, todayISO } from "../lib/time.js";
+import { listAccounts } from "../repo/accounts.js";
+import { balanceByCurrency, listTransactions, summaryByCurrency } from "../repo/transactions.js";
+import { deleteSetting, getSetting, getZenMoneyToken, maskToken, setZenMoneyToken } from "../repo/settings.js";
+import { syncState, syncZenMoney } from "../zenmoney/sync.js";
+import { dashboardPage, docsPage, loginPage, settingsPage } from "../web/pages.js";
+import type { Ctx } from "./api.js";
+
+const MONTHS = [
+  "январь",
+  "февраль",
+  "март",
+  "апрель",
+  "май",
+  "июнь",
+  "июль",
+  "август",
+  "сентябрь",
+  "октябрь",
+  "ноябрь",
+  "декабрь",
+];
+
+export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
+  const { config, db } = ctx;
+
+  const setSession = (reply: Parameters<FastifyInstance["get"]>[1] extends never ? never : any) => {
+    reply.setCookie("fo_session", sessionValue(config), {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: config.publicUrl.startsWith("https://"),
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  };
+
+  const requirePage = async (request: any, reply: any) => {
+    if (!isAdminCookie(request, config)) return reply.redirect("/login");
+  };
+
+  app.get("/", async (_request, reply) => reply.redirect(isAdminCookie(_request, config) ? "/app" : "/login"));
+
+  app.get("/login", async (_request, reply) => {
+    reply.type("text/html; charset=utf-8");
+    return loginPage();
+  });
+
+  app.post("/login", async (request, reply) => {
+    const body = (request.body ?? {}) as { token?: string };
+    const token = (body.token ?? "").trim();
+    if (!token || !safeEqual(token, config.adminToken)) {
+      reply.type("text/html; charset=utf-8");
+      return reply.code(401).send(loginPage("Неверный токен"));
+    }
+    setSession(reply);
+    return reply.redirect("/app");
+  });
+
+  app.post("/logout", async (_request, reply) => {
+    reply.clearCookie("fo_session", { path: "/" });
+    return reply.redirect("/login");
+  });
+
+  app.get("/app", { preHandler: requirePage }, async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    const now = new Date();
+    const from = q.from && isValidISODate(q.from) ? q.from : monthStartISO(now);
+    const to = q.to && isValidISODate(q.to) ? q.to : todayISO();
+
+    const sync = syncState(db);
+    const token = getZenMoneyToken(db, config.secret);
+
+    reply.type("text/html; charset=utf-8");
+    return dashboardPage({
+      balances: balanceByCurrency(db),
+      summary: summaryByCurrency(db, from, to),
+      accounts: listAccounts(db),
+      transactions: listTransactions(db, { from, to, limit: 60 }),
+      from,
+      to,
+      monthLabel: `${MONTHS[now.getMonth()]} ${now.getFullYear()}`,
+      lastSyncAt: sync.lastSyncAt,
+      lastError: sync.lastError,
+      hasToken: Boolean(token),
+      flash: q.flash ?? null,
+    });
+  });
+
+  app.post("/app/sync", { preHandler: requirePage }, async (_request, reply) => {
+    const token = getZenMoneyToken(db, config.secret);
+    if (!token) return reply.redirect("/app/settings?flash=err:Сначала%20добавьте%20токен");
+    try {
+      const stats = await syncZenMoney(db, token, config.baseCurrency);
+      return reply.redirect(`/app?flash=${encodeURIComponent(`Синхронизировано: ${stats.transactions} операций, ${stats.accounts} счетов`)}`);
+    } catch (error) {
+      return reply.redirect(`/app?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
+    }
+  });
+
+  app.get("/app/settings", { preHandler: requirePage }, async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    const sync = syncState(db);
+    const hasToken = Boolean(getSetting(db, "zenmoney.token"));
+    const token = getZenMoneyToken(db, config.secret);
+
+    reply.type("text/html; charset=utf-8");
+    return settingsPage({
+      hasToken,
+      tokenMasked: token ? maskToken(token) : null,
+      lastSyncAt: sync.lastSyncAt,
+      lastError: sync.lastError,
+      flash: q.flash ?? null,
+      agentTokenConfigured: Boolean(config.agentToken),
+      publicUrl: config.publicUrl.replace(/\/$/, ""),
+    });
+  });
+
+  app.post("/app/settings/token", { preHandler: requirePage }, async (request, reply) => {
+    const body = (request.body ?? {}) as { token?: string };
+    const token = (body.token ?? "").trim();
+    if (token.length < 10) return reply.redirect(`/app/settings?flash=${encodeURIComponent("err:Токен слишком короткий")}`);
+    setZenMoneyToken(db, config.secret, token);
+    return reply.redirect("/app/settings?flash=token");
+  });
+
+  app.post("/app/settings/token/delete", { preHandler: requirePage }, async (_request, reply) => {
+    deleteSetting(db, "zenmoney.token");
+    return reply.redirect("/app/settings?flash=token_deleted");
+  });
+
+  app.get("/docs", { preHandler: requirePage }, async (_request, reply) => {
+    reply.type("text/html; charset=utf-8");
+    return docsPage(config.publicUrl.replace(/\/$/, ""));
+  });
+
+  // Небольшая страница 404 вместо JSON — для браузера.
+  app.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith("/api/") || request.url.startsWith("/mcp")) {
+      return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Маршрут не найден" } });
+    }
+    return reply.code(404).type("text/html; charset=utf-8").send(
+      `<body style="background:#0b0f14;color:#e6edf3;font-family:sans-serif;padding:40px">
+        <h1>404</h1><p>Страница не найдена. <a style="color:#60a5fa" href="/app">На главную</a></p></body>`,
+    );
+  });
+}

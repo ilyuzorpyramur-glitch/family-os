@@ -2,16 +2,18 @@
   "name": "family-os",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@9.12.0",
+  "type": "module",
+  "workspaces": [
+    "apps/api"
+  ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
-    "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
-    "db:migrate": "pnpm --filter @familyos/api db:migrate"
+    "dev": "npm run dev --workspace @familyos/api",
+    "build": "npm run build --workspace @familyos/api",
+    "start": "npm run start --workspace @familyos/api",
+    "test": "npm run test --workspace @familyos/api",
+    "typecheck": "npm run typecheck --workspace @familyos/api"
   }
 }

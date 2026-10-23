@@ -2,6 +2,22 @@
 
 Основные сущности. Имена — как в Prisma; поля сокращены до значимых.
 
+## M1: что реализовано
+
+Фактическая схема M1 — SQLite (`apps/api/src/db.ts`): `accounts`, `categories`,
+`transactions`, `postings`, `sync_state`, `settings`, `agent_calls`, `bank_connections`.
+
+Отличия от целевой Prisma-модели ниже:
+
+- Нет `Family`/`User`/`Device`: инстанс однопользовательский, доступ по `ADMIN_TOKEN`.
+- `Account.external_id` — id счёта в Zen Money; `balance_minor` приходит из API.
+- `Transaction` хранит знаковую сумму в валюте операции; `kind` — expense/income/transfer;
+  для перевода заполнен `counter_account_id`.
+- `Posting` — проводки для инварианта Σ=0; категория участвует как «контр-счёт».
+- `bank_connections` создана под будущие провайдеры, в M1 не используется.
+
+Ниже — целевая модель для мультисемейной версии (M2+).
+
 ## Идентичность
 
 ```prisma

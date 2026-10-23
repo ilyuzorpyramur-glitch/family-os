@@ -11,9 +11,9 @@
 
 1. Прочитать `README.md` и релевантный документ в `docs/`.
 2. Проверить `docs/ROADMAP.md`: не делаем фичи вне текущей вехи без явного запроса.
-3. Изменения схемы данных — только с миграцией Prisma и обновлением `docs/DATA-MODEL.md`.
+3. Изменения схемы данных — только идемпотентным DDL в `apps/api/src/db.ts` + обновление `docs/DATA-MODEL.md`.
 4. Решения, меняющие архитектуру, — новый ADR в `docs/DECISIONS/`.
-5. Перед PR: `pnpm lint && pnpm typecheck && pnpm test`.
+5. Перед PR: `npm run typecheck && npm test`.
 
 ## Правила кода
 

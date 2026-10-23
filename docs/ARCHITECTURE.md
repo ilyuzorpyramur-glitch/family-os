@@ -34,8 +34,8 @@
 
 | Слой | Выбор | Почему |
 |---|---|---|
-| Backend | TypeScript, Fastify, Prisma, PostgreSQL | быстрый старт, строгие схемы, один язык с веб и ботом |
-| Очереди | Redis + BullMQ | импорт банков, синхронизация, напоминания |
+| Backend | TypeScript, Fastify, better-sqlite3 | один контейнер, без ORM и внешней БД (ADR 0004) |
+| Очереди | пока нет; синхронизация по запросу | для семьи достаточно, BullMQ — при появлении фоновых задач |
 | Web | Next.js (App Router), Tailwind, shadcn/ui | SSR-дашборды, быстрый UI |
 | Android | Kotlin, Compose, Room, WorkManager, Hilt | нативный доступ к DevicePolicyManager, UsageStats, VPNService |
 | Sync | delta-синхронизация по `updated_at` + outbox | оффлайн-первый, устойчивость к конфликтам |

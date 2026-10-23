@@ -1,0 +1,22 @@
+services:
+  family-os:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: family-os
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3001}:3001"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}
+      AGENT_TOKEN: ${AGENT_TOKEN:-}
+      ZENMONEY_TOKEN: ${ZENMONEY_TOKEN:-}
+      FAMILYOS_SECRET: ${FAMILYOS_SECRET:?set FAMILYOS_SECRET in .env}
+      BASE_CURRENCY: ${BASE_CURRENCY:-PLN}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3001}
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - familyos-data:/data
+
+volumes:
+  familyos-data:

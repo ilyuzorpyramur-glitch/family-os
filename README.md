@@ -4,64 +4,105 @@
 питание и геймификация — с агентом OpenClaw, который всё это связывает,
 автоматизирует и объясняет.
 
-> Статус: **M0 — каркас и проектирование**. Код приложений появится в M1.
-> Репозиторий создан 2026-10-23.
+> **Статус: M1 — деньги.** Сервер работает, тянет счета и операции из Zen Money,
+> показывает дашборд и отдаёт MCP-инструменты OpenClaw. Модули Guard/Pantry/Nutrition/Quest —
+> спроектированы, код впереди.
 
-## Что входит
+## Что уже работает
 
-| Модуль | Референс | Что делаем |
-|---|---|---|
-| **Guard** — родительский контроль | Google Family Link, Qustodio | экранное время, расписания, лимиты приложений, фильтрация веба, геозоны, SOS, защита от удаления |
-| **Money** — семейные финансы | Zen Money, CoinKeeper | счета, операции, категории, бюджеты, recurring, мультивалютность, импорт из банков |
-| **Pantry** — дом и запасы | Grocy | продукты, места хранения, партии, сроки годности, списки покупок, расход |
-| **Nutrition** — калории и БЖУ | Lifesum, MyFitnessPal | дневник питания, штрихкоды, рецепты, нормы, отчёты |
-| **Quest** — геймификация | LifeUp, Habitica | задания, привычки, XP, уровни, достижения, награды, семейный рейтинг |
-| **Copilot** — OpenClaw | — | автоматизации, рекомендации, дайджесты, Telegram-бот, MCP-инструменты |
+- **Zen Money** — синхронизация счетов по валютам, категорий, доходов/расходов и переводов
+  через официальный API (`api.zenmoney.ru/v8/diff/`) по токену с [zerro.app/token](https://zerro.app/token).
+- **Двойная запись** — каждая операция раскладывается на проводки, сумма которых равна нулю.
+- **Веб-панель** — балансы, итоги месяца, счета и последние операции. Тёмная тема, мобильная вёрстка.
+- **MCP для OpenClaw** — `accounts_list`, `money_summary`, `transactions_list`,
+  `categories_list`, `add_transaction`, `sync_now`. Все вызовы аудируются.
+- **Self-hosted** — один контейнер, SQLite в томе, без внешних зависимостей кроме Zen Money.
 
-Модули не изолированы: покупки уменьшают бюджет и запасы, приготовление еды списывает
-продукты и добавляет калории, выполненные задания дают XP и могут оплачиваться карманными.
-
-## Архитектура в одном экране
-
-```
-Android (Kotlin/Compose)  ─┐
-Web-панель (Next.js)      ─┼─ REST/tRPC ─→ API (Fastify + Prisma + Postgres)
-Telegram (grammY)         ─┘                    │
-                                                ├─ Redis/BullMQ: синхронизация, импорт, напоминания
-OpenClaw  ←─ MCP (tools) ───────────────────────┘
-```
-
-Подробно: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA-MODEL.md](docs/DATA-MODEL.md).
-
-## Структура репозитория
-
-```
-apps/android      Android-приложение (родитель + детский режим, device owner)
-apps/api          Backend: Fastify, Prisma, Postgres, очереди
-apps/web          Веб-панель родителя
-packages/shared   Типы, схемы валидации, клиент API
-packages/openclaw-plugin  MCP-сервер и скиллы для OpenClaw
-packages/telegram-bot     Telegram-интерфейс
-docs              Продукт, архитектура, модель данных, решения
-infra             docker-compose, миграции, окружения
-```
-
-## Быстрый старт (после M1)
+## Быстрый старт (Docker)
 
 ```bash
-cp infra/.env.example infra/.env
-docker compose -f infra/docker-compose.yml up -d   # postgres, redis, api
-pnpm install && pnpm dev
+cp .env.example .env
+# впишите ADMIN_TOKEN и FAMILYOS_SECRET:
+#   openssl rand -base64 24   → ADMIN_TOKEN
+#   openssl rand -hex 32      → FAMILYOS_SECRET
+docker compose up -d --build
 ```
 
-## Принципы
+Откройте `http://localhost:3001`, войдите с `ADMIN_TOKEN`, затем
+**Настройки → Zen Money** → вставьте токен с [zerro.app/token](https://zerro.app/token) →
+**Синхронизировать**.
 
-1. **Local-first.** Данные семьи хранятся у семьи; облако — опция, а не условие.
-2. **Прозрачность.** Ребёнок видит, что и зачем собирается. Скрытая слежка — нет.
-3. **Один агент, много поверхностей.** OpenClaw — единственный «мозг» автоматизаций.
-4. **Деньги — двойная запись.** Никаких «примерных» балансов.
-5. **Импорт прежде ввода.** Данные приходят из банков, штрихкодов и устройств.
+## Локальная разработка
+
+```bash
+npm install
+ADMIN_TOKEN=dev-token FAMILYOS_DATA_DIR=./data npm run dev
+# http://localhost:3001
+```
+
+Тесты: `npm test` (5 тестов: API, MCP, импорт, двойная запись, сводка).
+
+## Подключение OpenClaw
+
+```json
+{
+  "mcpServers": {
+    "family-os": {
+      "url": "https://your-host/mcp",
+      "headers": { "Authorization": "Bearer $AGENT_TOKEN" }
+    }
+  }
+}
+```
+
+Инструменты возвращают суммы в валюте операции и `asOf`. Записывающие действия
+(`add_transaction`) помечаются `source=agent` и попадают в `agent_calls`.
+
+## Архитектура
+
+```
+Браузер / Android ── HTTP ──┐
+OpenClaw ── MCP /mcp ───────┼── Fastify (Node 24) ── SQLite (WAL)
+Telegram (план) ────────────┘         │
+                                      ├── Zen Money API (v8/diff)
+                                      └── AES-256-GCM для токенов
+```
+
+Подробно: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+[docs/DATA-MODEL.md](docs/DATA-MODEL.md),
+[docs/DECISIONS/0004-sqlite-first.md](docs/DECISIONS/0004-sqlite-first.md).
+
+## Структура
+
+```
+apps/api/src
+  routes/       REST /api и веб-страницы
+  mcp/          MCP-сервер (JSON-RPC, Streamable HTTP)
+  zenmoney/     клиент и импорт diff
+  repo/         счета, категории, операции, настройки
+  web/          серверный HTML без сборки
+  test/         node:test
+docs/           продукт, архитектура, модель данных, ADR, модули
+```
+
+## Модули
+
+| Модуль | Статус |
+|---|---|
+| Money (Zen Money, двойная запись, бюджеты) | работает: счета, операции, сводки; бюджеты — далее |
+| Guard (родительский контроль) | дизайн: [docs/modules/GUARD.md](docs/modules/GUARD.md) |
+| Pantry (запасы, Grocy-подобно) | дизайн: [docs/modules/PANTRY.md](docs/modules/PANTRY.md) |
+| Nutrition (калории, штрихкоды) | дизайн: [docs/modules/NUTRITION.md](docs/modules/NUTRITION.md) |
+| Quest (XP, задания, награды) | дизайн: [docs/modules/QUEST.md](docs/modules/QUEST.md) |
+| Copilot (OpenClaw, MCP, Telegram) | MCP работает; Telegram — далее |
+
+## Безопасность
+
+- Один администратор на инстанс (мультироли — в M1.5). Токены — только в заголовке или HttpOnly-cookie.
+- Токен Zen Money шифруется AES-256-GCM ключом `FAMILYOS_SECRET`.
+- Секреты не попадают в логи; MCP-вызовы аудируются в `agent_calls`.
+- Подробности: [docs/SECURITY-PRIVACY.md](docs/SECURITY-PRIVACY.md).
 
 ## Лицензия
 
-MIT — см. [LICENSE](LICENSE). Сторонние API и банковские интеграции регулируются их условиями.
+MIT — см. [LICENSE](LICENSE).
