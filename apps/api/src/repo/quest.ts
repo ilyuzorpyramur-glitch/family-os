@@ -28,6 +28,7 @@ export type QuestRow = {
   status: string;
   approval: string;
   photos_required: number;
+  shared: number;
   created_by: string;
   created_at: string;
   completed_at: string | null;
@@ -114,13 +115,14 @@ export type QuestInput = {
   createdBy?: string;
   approval?: "parent" | "agent";
   photosRequired?: number;
+  shared?: boolean;
 };
 
 export function createQuest(db: DB, input: QuestInput): QuestRow {
   const id = `q_${crypto.randomUUID()}`;
   db.prepare(
-    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required, shared)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.childId,
@@ -134,6 +136,7 @@ export function createQuest(db: DB, input: QuestInput): QuestRow {
     input.createdBy ?? "parent",
     input.approval ?? "parent",
     Math.max(0, Math.min(10, Math.round(input.photosRequired ?? 0))),
+    input.shared ? 1 : 0,
   );
   addQuestEvent(db, input.childId, id, "created", { by: input.createdBy ?? "parent" });
   return getQuest(db, id)!;
@@ -199,7 +202,7 @@ export function listQuests(
   const where: string[] = [];
   const params: unknown[] = [];
   if (opts.childId) {
-    where.push("child_id = ?");
+    where.push("(child_id = ? OR shared = 1)");
     params.push(opts.childId);
   }
   if (opts.status) {
@@ -215,6 +218,15 @@ export function listQuests(
        ORDER BY CASE status WHEN 'completed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, created_at DESC LIMIT ?`,
     )
     .all(...params) as QuestRow[];
+}
+
+export function claimQuest(db: DB, questId: string, childId: string): QuestRow {
+  const result = db
+    .prepare("UPDATE quests SET child_id = ?, shared = 0 WHERE id = ? AND shared = 1 AND status = 'active'")
+    .run(childId, questId);
+  if (result.changes === 0) throw new Error("Задание уже взято");
+  addQuestEvent(db, childId, questId, "claimed", {});
+  return getQuest(db, questId)!;
 }
 
 export function completeQuest(db: DB, questId: string, by = "child"): QuestRow {
@@ -490,7 +502,7 @@ export function listProposals(db: DB, opts: { status?: string; childId?: string 
     params.push(opts.status);
   }
   if (opts.childId) {
-    where.push("child_id = ?");
+    where.push("(child_id = ? OR shared = 1)");
     params.push(opts.childId);
   }
   return db

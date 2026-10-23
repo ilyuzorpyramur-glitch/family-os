@@ -131,6 +131,53 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
     }
   });
 
+  app.get("/api/guard/children/:id/profile", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const child = getChildProfile(db, id);
+    if (!child) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Ребёнок не найден" } });
+    return { ok: true, data: { ...child, avatarUrl: imageUrl(config.publicUrl, child.avatar_path) } };
+  });
+
+  app.patch("/api/guard/children/:id/profile", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z
+      .object({
+        nickname: z.string().max(40).nullable().optional(),
+        school: z.string().max(120).nullable().optional(),
+        grade: z.string().max(40).nullable().optional(),
+        birthDate: z.string().nullable().optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    const child = updateChildProfile(db, id, {
+      nickname: body.data.nickname,
+      school: body.data.school,
+      grade: body.data.grade,
+    });
+    if (!child) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Ребёнок не найден" } });
+    if (body.data.birthDate !== undefined) {
+      db.prepare("UPDATE children SET birth_date = ? WHERE id = ?").run(body.data.birthDate, id);
+    }
+    return { ok: true, data: child };
+  });
+
+  app.post("/api/guard/children/:id/avatar", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ imageBase64: z.string().min(10) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужно изображение" } });
+    }
+    try {
+      const path = saveImage(config.dataDir, body.data.imageBase64);
+      setChildAvatar(db, id, path);
+      return { ok: true, data: { avatarUrl: imageUrl(config.publicUrl, path) } };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: { code: "UPLOAD_FAILED", message: (error as Error).message } });
+    }
+  });
+
   app.get("/api/guard/children/:id/geofences", { preHandler: parentGuard }, async (request) => {
     const { id } = request.params as { id: string };
     return { ok: true, data: listGeofences(db, id) };

@@ -1,6 +1,7 @@
 import type { DB } from "../db.js";
 import { localDateISO } from "../lib/time.js";
 import { addEvent, getChild, listGeofences } from "./guard.js";
+import { eventAllowsGeofence } from "./events.js";
 import { completeQuest, decideQuest, ensureProfile, getQuest, profileView, questPhotos, listQuests } from "./quest.js";
 
 export function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -95,7 +96,8 @@ export function processLocation(
       }
     }
 
-    if (!inside && fence.fine_coins > 0 && inSchedule(fence.schedule_start, fence.schedule_end, now)) {
+    const allowed = eventAllowsGeofence(db, childId, fence.id, localDateISO(), now);
+    if (!inside && !allowed && fence.fine_coins > 0 && inSchedule(fence.schedule_start, fence.schedule_end, now)) {
       const cooldownMs = Math.max(1, fence.fine_every_min) * 60_000;
       const last = lastFine ? new Date(`${lastFine.replace(" ", "T")}Z`).getTime() : 0;
       if (now.getTime() - last >= cooldownMs) {

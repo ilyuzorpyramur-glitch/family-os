@@ -6,19 +6,22 @@ import { listAccounts } from "../repo/accounts.js";
 import { balanceByCurrency, listTransactions, summaryByCurrency } from "../repo/transactions.js";
 import { deleteSetting, getSetting, getZenMoneyToken, maskToken, setZenMoneyToken } from "../repo/settings.js";
 import { syncState, syncZenMoney } from "../zenmoney/sync.js";
-import { dashboardPage, deviceTokenPage, docsPage, guardPage, loginPage, questsPage, settingsPage } from "../web/pages.js";
+import { dashboardPage, deviceTokenPage, docsPage, eventsPage, guardPage, loginPage, questsPage, settingsPage } from "../web/pages.js";
 import type { Ctx } from "./api.js";
 import {
   createChild,
   createDevice,
   createGeofence,
   deleteGeofence,
+  getChildProfile,
+  updateChildProfile,
   decideExtensionRequest,
   getChild,
   guardOverview,
   listEvents,
   updatePolicy,
 } from "../repo/guard.js";
+import { decideEvent, listEvents as listChildEvents } from "../repo/events.js";
 import {
   createQuest,
   createShopItem,
@@ -326,6 +329,45 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
     const { id } = request.params as { id: string };
     deleteGeofence(db, id);
     return reply.redirect("/app/guard?flash=geofence_deleted");
+  });
+
+  app.post("/app/guard/children/:id/profile", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, string | undefined>;
+    updateChildProfile(db, id, {
+      nickname: (body.nickname ?? "").trim() || null,
+      school: (body.school ?? "").trim() || null,
+      grade: (body.grade ?? "").trim() || null,
+    });
+    if (body.birthDate) {
+      db.prepare("UPDATE children SET birth_date = ? WHERE id = ?").run(body.birthDate, id);
+    }
+    return reply.redirect("/app/guard?flash=profile_saved");
+  });
+
+  app.get("/app/events", { preHandler: requirePage }, async (request, reply) => {
+    const q = request.query as Record<string, string | undefined>;
+    const names: Record<string, string> = {};
+    (db.prepare("SELECT id, name FROM children").all() as { id: string; name: string }[]).forEach((child) => {
+      names[child.id] = child.name;
+    });
+    reply.type("text/html; charset=utf-8");
+    return eventsPage(listChildEvents(db, { status: q.status ?? "pending" }), names, q.flash ?? null);
+  });
+
+  app.post("/app/events/:id/decide", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, string | undefined>;
+    const approve = body.approve === "yes";
+    try {
+      decideEvent(db, id, approve, "parent", {
+        startTime: body.startTime && /^\d{2}:\d{2}$/.test(body.startTime) ? body.startTime : undefined,
+        durationMin: Number.isFinite(Number(body.durationMin)) ? Number(body.durationMin) : undefined,
+      });
+      return reply.redirect(`/app/events?flash=${approve ? "event_approved" : "event_rejected"}`);
+    } catch (error) {
+      return reply.redirect(`/app/events?flash=${encodeURIComponent(`err:${(error as Error).message}`)}`);
+    }
   });
 
   app.get("/docs", { preHandler: requirePage }, async (_request, reply) => {

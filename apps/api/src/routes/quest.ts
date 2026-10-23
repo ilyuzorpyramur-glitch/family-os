@@ -6,6 +6,7 @@ import { findDeviceByToken, getChild } from "../repo/guard.js";
 import {
   addQuestPhoto,
   buyItem,
+  claimQuest,
   completeQuest,
   createQuest,
   createShopItem,
@@ -68,6 +69,7 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
         dueAt: z.string().optional(),
         approval: z.enum(["parent", "agent"]).default("parent"),
         photosRequired: z.number().int().min(0).max(10).default(0),
+        shared: z.boolean().default(false),
       })
       .safeParse(request.body);
 
@@ -76,7 +78,13 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
     }
 
     const author = bearerActor(request, config) === "agent" ? "agent" : "parent";
-    const quest = createQuest(db, { childId: id, ...body.data, createdBy: author });
+    let childId = id;
+    if (body.data.shared) {
+      const first = db.prepare("SELECT id FROM children ORDER BY created_at LIMIT 1").get() as { id: string } | undefined;
+      if (!first) return reply.code(400).send({ ok: false, error: { code: "NO_CHILDREN", message: "Нет детей" } });
+      childId = first.id;
+    }
+    const quest = createQuest(db, { childId, ...body.data, createdBy: author });
     return { ok: true, data: quest };
   });
 
@@ -176,6 +184,16 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
         purchases: listPurchases(db, { childId: device.child_id, limit: 20 }),
       },
     };
+  });
+
+  app.post("/api/device/quests/:id/claim", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const { id } = request.params as { id: string };
+    try {
+      return { ok: true, data: claimQuest(db, id, device.child_id) };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: { code: "CLAIM_REJECTED", message: (error as Error).message } });
+    }
   });
 
   app.post("/api/device/quests/:id/complete", { preHandler: deviceGuard }, async (request, reply) => {

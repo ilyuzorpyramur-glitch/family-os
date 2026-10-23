@@ -90,6 +90,7 @@ function layout(title: string, body: string, opts: { nav?: boolean } = {}): stri
         <a href="/app">Обзор</a>
         <a href="/app/guard">Guard</a>
         <a href="/app/quests">Задания</a>
+        <a href="/app/events">События</a>
         <a href="/app/settings">Настройки</a>
         <a href="/docs">MCP</a>
         <form class="inline" method="post" action="/logout"><button class="ghost" type="submit">Выйти</button></form>
@@ -174,6 +175,9 @@ function flashBlock(flash: string | null): string {
     purchase_denied: "Покупка отклонена.",
     proposal_priced: "Цена установлена, товар в магазине.",
     proposal_rejected: "Предложение отклонено.",
+    event_approved: "Событие одобрено.",
+    event_rejected: "Событие отклонено.",
+    profile_saved: "Данные ребёнка сохранены.",
   };
   if (flash.startsWith("err:")) {
     return `<div class="banner err">${escapeHtml(flash.slice(4))}</div>`;
@@ -421,6 +425,15 @@ export function guardPage(
             <form class="mini-form" method="post" action="/app/guard/children/${escapeHtml(child.id)}/devices" style="margin-top:10px">
               <div class="field"><label>Название телефона</label><input name="name" placeholder="Телефон Алисы" required></div>
               <button type="submit">Привязать</button>
+            </form>
+
+            <h3 style="margin-top:16px">Данные ребёнка</h3>
+            <form class="mini-form" method="post" action="/app/guard/children/${escapeHtml(child.id)}/profile">
+              <div class="field"><label>Никнейм</label><input name="nickname" placeholder="Как звать" value="${escapeHtml((child as any).nickname ?? "")}"></div>
+              <div class="field"><label>Школа</label><input name="school" value="${escapeHtml((child as any).school ?? "")}"></div>
+              <div class="field"><label>Класс</label><input name="grade" value="${escapeHtml((child as any).grade ?? "")}"></div>
+              <div class="field"><label>Дата рождения</label><input name="birthDate" type="date" value="${escapeHtml((child as any).birth_date ?? "")}"></div>
+              <button type="submit">Сохранить</button>
             </form>
 
             <h3 style="margin-top:16px">Геозоны</h3>
@@ -712,6 +725,57 @@ export function questsPage(data: QuestOverview, flash: string | null, publicUrl 
             <button type="submit">Добавить</button>
           </div>
         </form>
+      </section>
+    </main>`,
+    { nav: true },
+  );
+}
+
+
+export type EventView = {
+  id: string;
+  child_id: string;
+  title: string;
+  date: string;
+  start_time: string;
+  duration_min: number;
+  status: string;
+  geofence_id: string | null;
+};
+
+export function eventsPage(events: EventView[], names: Record<string, string>, flash: string | null): string {
+  const rows = events.length
+    ? events
+        .map(
+          (event) => `<div class="li">
+            <span>${escapeHtml(event.title)}
+              <div class="sub">${escapeHtml(names[event.child_id] ?? "")} · ${escapeHtml(event.date)} · ${escapeHtml(event.start_time)} · ${event.duration_min} мин${
+                event.geofence_id ? " · геозона" : ""
+              }</div>
+            </span>
+            <span>
+              <form class="inline" method="post" action="/app/events/${escapeHtml(event.id)}/decide">
+                <input type="time" name="startTime" value="${escapeHtml(event.start_time)}" style="width:100px">
+                <input type="number" name="durationMin" value="${event.duration_min}" min="15" max="720" style="width:70px">
+                <input type="hidden" name="approve" value="yes"><button type="submit">Одобрить</button>
+              </form>
+              <form class="inline" method="post" action="/app/events/${escapeHtml(event.id)}/decide">
+                <input type="hidden" name="approve" value="no"><button class="ghost" type="submit">Отклонить</button>
+              </form>
+            </span>
+          </div>`,
+        )
+        .join("")
+    : `<p class="sub">Нет событий на подтверждении.</p>`;
+
+  return layout(
+    "События",
+    `<main>
+      ${flashBlock(flash)}
+      <div class="banner">Ребёнок предлагает событие с местом и временем — родитель может изменить время и длительность, затем одобрить.</div>
+      <section class="card">
+        <div class="section-head"><h2>Запросы на события</h2></div>
+        ${rows}
       </section>
     </main>`,
     { nav: true },

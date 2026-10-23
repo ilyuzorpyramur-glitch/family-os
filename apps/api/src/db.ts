@@ -256,6 +256,24 @@ CREATE TABLE IF NOT EXISTS shop_purchases (
 
 CREATE INDEX IF NOT EXISTS idx_purchases_status ON shop_purchases(status, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS events (
+  id           TEXT PRIMARY KEY,
+  child_id     TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  title        TEXT NOT NULL,
+  geofence_id  TEXT,
+  date         TEXT NOT NULL,
+  start_time   TEXT NOT NULL,
+  duration_min INTEGER NOT NULL DEFAULT 60,
+  status       TEXT NOT NULL DEFAULT 'pending',
+  note         TEXT,
+  created_by   TEXT NOT NULL DEFAULT 'child',
+  approved_by  TEXT,
+  approved_at  TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_child_date ON events(child_id, date);
+
 CREATE TABLE IF NOT EXISTS quest_photos (
   id         TEXT PRIMARY KEY,
   quest_id   TEXT NOT NULL REFERENCES quests(id) ON DELETE CASCADE,
@@ -330,6 +348,7 @@ export function openDb(file: string): DB {
   addColumn(db, "devices", "last_lat", "last_lat REAL");
   addColumn(db, "devices", "last_lng", "last_lng REAL");
   addColumn(db, "devices", "last_location_at", "last_location_at TEXT");
+  addColumn(db, "quests", "shared", "shared INTEGER NOT NULL DEFAULT 0");
   return db;
 }
 

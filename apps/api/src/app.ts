@@ -9,6 +9,7 @@ import { seedCategories } from "./repo/categories.js";
 import { registerApi } from "./routes/api.js";
 import { registerGuardApi } from "./routes/guard.js";
 import { registerQuestApi } from "./routes/quest.js";
+import { registerEventsApi } from "./routes/events.js";
 import { registerWeb } from "./routes/web.js";
 import { registerMcp } from "./mcp/server.js";
 
@@ -41,6 +42,7 @@ export async function buildApp({ config, db, logger = false }: AppOptions): Prom
   registerApi(app, { config, db });
   registerGuardApi(app, { config, db });
   registerQuestApi(app, { config, db });
+  registerEventsApi(app, { config, db });
   registerMcp(app, { config, db });
   registerWeb(app, { config, db });
 
