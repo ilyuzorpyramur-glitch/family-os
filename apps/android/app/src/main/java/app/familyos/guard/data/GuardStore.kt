@@ -58,6 +58,9 @@ data class Policy(
     val bedtimeStart: String,
     val bedtimeEnd: String,
     val webFilter: Boolean,
+    val coins: Int = 0,
+    val extensionMinutes: Int = 30,
+    val extensionCost: Int = 50,
 ) {
     /** Причина блокировки на текущий момент: limit, bedtime или null. */
     fun blockReasonAt(now: LocalTime = LocalTime.now()): String? {
@@ -89,6 +92,9 @@ data class Policy(
                 bedtimeStart = policy.optString("bedtime_start", "21:00"),
                 bedtimeEnd = policy.optString("bedtime_end", "07:00"),
                 webFilter = policy.optInt("web_filter", 0) == 1,
+                coins = data.optInt("coins", 0),
+                extensionMinutes = data.optJSONObject("extension")?.optInt("minutes", 30) ?: 30,
+                extensionCost = data.optJSONObject("extension")?.optInt("costCoins", 50) ?: 50,
             )
         }
     }

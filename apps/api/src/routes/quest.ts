@@ -21,6 +21,7 @@ import {
   rejectProposal,
   questPhotos,
   questOverview,
+  refreshRecurring,
 } from "../repo/quest.js";
 import { imageUrl, saveImage } from "../uploads.js";
 
@@ -165,6 +166,7 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
 
   app.get("/api/device/quests", { preHandler: deviceGuard }, async (request) => {
     const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    refreshRecurring(db, device.child_id);
     return {
       ok: true,
       data: {

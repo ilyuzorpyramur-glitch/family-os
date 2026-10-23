@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -74,6 +75,8 @@ private data class UiState(
     val usageAccess: Boolean = false,
     val accessibility: Boolean = false,
     val serverUrl: String = "",
+    val familyLink: Boolean = false,
+    val deviceOwnerPackage: String? = null,
 )
 
 class MainActivity : ComponentActivity() {
@@ -89,6 +92,9 @@ class MainActivity : ComponentActivity() {
     private var proposalPhoto by mutableStateOf<String?>(null)
 
     private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private val locationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val questPhotoPicker =
@@ -123,6 +129,12 @@ class MainActivity : ComponentActivity() {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
@@ -135,7 +147,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (state.configured) {
-                        Column(Modifier.fillMaxSize()) {
+                        Column(Modifier.fillMaxSize().statusBarsPadding()) {
                             Box(Modifier.weight(1f)) {
                                 when (tab) {
                                     0 -> Dashboard(
@@ -221,7 +233,10 @@ class MainActivity : ComponentActivity() {
             usageAccess = hasUsageAccess(),
             accessibility = isAccessibilityEnabled(),
             serverUrl = store.serverUrl,
+            familyLink = isFamilyLinkInstalled(),
+            deviceOwnerPackage = deviceOwnerPackage(),
         )
+        blockUninstallIfOwner()
         if (!configured) return
 
         lifecycleScope.launch {
@@ -359,6 +374,31 @@ class MainActivity : ComponentActivity() {
         return dpm.isDeviceOwnerApp(packageName)
     }
 
+    private fun isFamilyLinkInstalled(): Boolean {
+        val packages = listOf(
+            "com.google.android.apps.kids.familylink",
+            "com.google.android.gms.supervision",
+            "com.google.android.apps.kids.familylinkhelper",
+        )
+        return packages.any { name ->
+            runCatching { packageManager.getPackageInfo(name, 0) }.isSuccess
+        }
+    }
+
+    private fun deviceOwnerPackage(): String? {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        return runCatching { dpm.getDeviceOwnerComponentOnAnyUser()?.packageName }.getOrNull()
+    }
+
+    private fun blockUninstallIfOwner() {
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        if (dpm.isDeviceOwnerApp(packageName)) {
+            runCatching {
+                dpm.setUninstallBlocked(ComponentName(this, GuardDeviceAdmin::class.java), packageName, true)
+            }
+        }
+    }
+
     private fun hasUsageAccess(): Boolean {
         val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -465,7 +505,6 @@ private fun Dashboard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onReset) { Text("Сброс") }
         }
 
         if (message != null) {
@@ -510,9 +549,19 @@ private fun Dashboard(
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Доступы", fontWeight = FontWeight.SemiBold)
-                PermissionRow("Статистика использования", state.usageAccess, onUsageSettings)
-                PermissionRow("Специальные возможности (блокировка)", state.accessibility, onAccessibilitySettings)
-                PermissionRow("Device Owner (защита от удаления)", state.deviceOwner, onAdmin)
+                if (!state.usageAccess) PermissionRow("Статистика использования", false, onUsageSettings)
+                if (!state.accessibility) PermissionRow("Специальные возможности (блокировка)", false, onAccessibilitySettings)
+                if (!state.deviceOwner) PermissionRow("Device Owner (защита от удаления)", false, onAdmin)
+                if (state.usageAccess && state.accessibility && state.deviceOwner) {
+                    Text("Все доступы выданы", color = Color(0xFF34D399), fontWeight = FontWeight.SemiBold)
+                }
+                Text(
+                    if (state.familyLink || state.deviceOwnerPackage?.contains("familylink") == true)
+                        "Google Family Link обнаружен. Если он управляет устройством, наш Device Owner недоступен — используйте Family Link для базовых лимитов, а наши задания и награды поверх."
+                    else "Google Family Link не обнаружен.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp,
+                )
                 Text(
                     "Device Owner назначается при первоначальной настройке телефона через QR или ADB. " +
                         "Без него лимиты работают, но приложение можно удалить.",

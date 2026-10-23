@@ -297,6 +297,7 @@ export function openDb(file: string): DB {
   addColumn(db, "quests", "approval", "approval TEXT NOT NULL DEFAULT 'parent'");
   addColumn(db, "quests", "photos_required", "photos_required INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "shop_items", "photo_path", "photo_path TEXT");
+  addColumn(db, "extension_requests", "cost_coins", "cost_coins INTEGER NOT NULL DEFAULT 0");
   return db;
 }
 

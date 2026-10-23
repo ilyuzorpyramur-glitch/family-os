@@ -11,6 +11,8 @@ import type { Ctx } from "./api.js";
 import {
   createChild,
   createDevice,
+  createGeofence,
+  deleteGeofence,
   decideExtensionRequest,
   getChild,
   guardOverview,
@@ -294,6 +296,32 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
       createdBy: "parent",
     });
     return reply.redirect("/app/quests?flash=shop_item");
+  });
+
+  app.post("/app/guard/children/:id/geofences", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, string | undefined>;
+    const lat = Number(body.lat);
+    const lng = Number(body.lng);
+    const radius = Number(body.radiusM);
+    const label = (body.label ?? "").trim();
+    if (!label || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return reply.redirect(`/app/guard?flash=${encodeURIComponent("err:Нужны название и координаты")}`);
+    }
+    createGeofence(db, {
+      childId: id,
+      label,
+      lat,
+      lng,
+      radiusM: Number.isFinite(radius) ? radius : 150,
+    });
+    return reply.redirect("/app/guard?flash=geofence_added");
+  });
+
+  app.post("/app/guard/geofences/:id/delete", { preHandler: requirePage }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    deleteGeofence(db, id);
+    return reply.redirect("/app/guard?flash=geofence_deleted");
   });
 
   app.get("/docs", { preHandler: requirePage }, async (_request, reply) => {

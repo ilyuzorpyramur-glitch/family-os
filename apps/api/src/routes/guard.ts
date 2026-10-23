@@ -3,11 +3,15 @@ import { z } from "zod";
 import { bearerActor, isAdminCookie } from "../auth.js";
 import type { Ctx } from "./api.js";
 import { localDateISO } from "../lib/time.js";
+import { ensureProfile, profileView, refreshRecurring } from "../repo/quest.js";
 import {
   addEvent,
   currentBlockReason,
   createChild,
   createDevice,
+  createGeofence,
+  deleteGeofence,
+  listGeofences,
   createExtensionRequest,
   decideExtensionRequest,
   effectiveLimit,
@@ -122,6 +126,35 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
     }
   });
 
+  app.get("/api/guard/children/:id/geofences", { preHandler: parentGuard }, async (request) => {
+    const { id } = request.params as { id: string };
+    return { ok: true, data: listGeofences(db, id) };
+  });
+
+  app.post("/api/guard/children/:id/geofences", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!getChild(db, id)) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Ребёнок не найден" } });
+    const body = z
+      .object({
+        label: z.string().min(1).max(80),
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+        radiusM: z.number().int().min(30).max(5000).optional(),
+        notifyEnter: z.boolean().optional(),
+        notifyExit: z.boolean().optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    return { ok: true, data: createGeofence(db, { childId: id, ...body.data }) };
+  });
+
+  app.delete("/api/guard/geofences/:id", { preHandler: parentGuard }, async (request) => {
+    const { id } = request.params as { id: string };
+    return { ok: true, data: { deleted: deleteGeofence(db, id) } };
+  });
+
   // --- Device API: авторизация токеном устройства ---
 
   const deviceGuard = async (request: FastifyRequest, reply: any) => {
@@ -138,6 +171,7 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
     const policy = ensurePolicy(db, device.child_id);
     const today = localDateISO();
     const usage = usageForDate(db, device.child_id, today);
+    const profile = profileView(db, device.child_id);
     return {
       ok: true,
       data: {
@@ -148,9 +182,46 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
         usedMinutes: usage.minutes,
         blockReason: currentBlockReason(policy, usage.minutes),
         remainMinutes: Math.max(0, effectiveLimit(policy, today) - usage.minutes),
+        coins: profile.coins,
+        extension: { minutes: 30, costCoins: 50 },
         serverTime: new Date().toISOString(),
       },
     };
+  });
+
+  app.get("/api/device/geofences", { preHandler: deviceGuard }, async (request) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    return {
+      ok: true,
+      data: listGeofences(db, device.child_id).map((g) => ({
+        id: g.id,
+        label: g.label,
+        lat: g.lat,
+        lng: g.lng,
+        radiusM: g.radius_m,
+        notifyEnter: Boolean(g.notify_enter),
+        notifyExit: Boolean(g.notify_exit),
+      })),
+    };
+  });
+
+  app.post("/api/device/geofences/event", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const body = z
+      .object({ geofenceId: z.string().min(1), type: z.enum(["enter", "exit"]) })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    const geofence = listGeofences(db, device.child_id).find((g) => g.id === body.data.geofenceId);
+    if (!geofence) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Геозона не найдена" } });
+    const event = addEvent(db, {
+      childId: device.child_id,
+      deviceId: device.id,
+      kind: body.data.type === "enter" ? "geofence_enter" : "geofence_exit",
+      payload: { geofenceId: geofence.id, label: geofence.label },
+    });
+    return { ok: true, data: event };
   });
 
   app.post("/api/device/usage", { preHandler: deviceGuard }, async (request, reply) => {
@@ -206,17 +277,40 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
   app.post("/api/device/extension-request", { preHandler: deviceGuard }, async (request, reply) => {
     const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
     const body = z
-      .object({ minutes: z.number().int().min(1).max(120), reason: z.string().max(300).optional() })
-      .safeParse(request.body);
+      .object({ minutes: z.number().int().min(30).max(30).default(30), reason: z.string().max(300).optional() })
+      .safeParse(request.body ?? {});
     if (!body.success) {
       return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
     }
-    const req = createExtensionRequest(db, {
-      childId: device.child_id,
-      deviceId: device.id,
-      minutes: body.data.minutes,
-      reason: body.data.reason ?? null,
-    });
+
+    const COST = 50;
+    const profile = ensureProfile(db, device.child_id);
+    if (profile.coins < COST) {
+      return reply.code(400).send({
+        ok: false,
+        error: { code: "NOT_ENOUGH_COINS", message: `Продление стоит ${COST} монет. У ребёнка ${profile.coins}.` },
+      });
+    }
+    const charged = db
+      .prepare("UPDATE character_profiles SET coins = coins - ?, updated_at = datetime('now') WHERE child_id = ? AND coins >= ?")
+      .run(COST, device.child_id, COST);
+    if (charged.changes === 0) {
+      return reply.code(400).send({ ok: false, error: { code: "NOT_ENOUGH_COINS", message: "Недостаточно монет" } });
+    }
+
+    let req;
+    try {
+      req = createExtensionRequest(db, {
+        childId: device.child_id,
+        deviceId: device.id,
+        minutes: 30,
+        reason: body.data.reason ?? null,
+        costCoins: COST,
+      });
+    } catch (error) {
+      db.prepare("UPDATE character_profiles SET coins = coins + ? WHERE child_id = ?").run(COST, device.child_id);
+      throw error;
+    }
     addEvent(db, {
       childId: device.child_id,
       deviceId: device.id,

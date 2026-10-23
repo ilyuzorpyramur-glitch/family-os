@@ -143,6 +143,55 @@ export function getQuest(db: DB, id: string): QuestRow | undefined {
   return db.prepare("SELECT * FROM quests WHERE id = ?").get(id) as QuestRow | undefined;
 }
 
+function addDays(dateISO: string, days: number): string {
+  const date = new Date(`${dateISO}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function nextDueFor(kind: string, fromISO: string): string | null {
+  if (kind === "daily") return addDays(fromISO, 1);
+  if (kind === "weekly") return addDays(fromISO, 7);
+  return null;
+}
+
+/** Создаёт следующую копию повторяющегося задания и закрывает просроченные. */
+export function refreshRecurring(db: DB, childId?: string): void {
+  const today = localDateISO();
+  const where = childId ? "child_id = ? AND" : "";
+  const params = childId ? [childId] : [];
+  const rows = db
+    .prepare(`SELECT * FROM quests WHERE ${where} status = 'active' AND kind IN ('daily','weekly')`)
+    .all(...params) as QuestRow[];
+
+  for (const quest of rows) {
+    const due = quest.due_at ? quest.due_at.slice(0, 10) : quest.created_at.slice(0, 10);
+    if (due >= today) continue;
+
+    db.prepare("UPDATE quests SET status = 'expired' WHERE id = ?").run(quest.id);
+    const nextDue = quest.kind === "daily" ? today : addDays(due, 7);
+    const id = `q_${crypto.randomUUID()}`;
+    db.prepare(
+      `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      quest.child_id,
+      quest.title,
+      quest.description,
+      quest.kind,
+      quest.xp,
+      quest.coins,
+      quest.stat,
+      nextDue,
+      "system",
+      quest.approval,
+      quest.photos_required,
+    );
+    addQuestEvent(db, quest.child_id, id, "recurring_created", { from: quest.id, due: nextDue });
+  }
+}
+
 export function listQuests(
   db: DB,
   opts: { childId?: string; status?: string; limit?: number } = {},
@@ -231,6 +280,31 @@ export function decideQuest(
     ).run(xp, quest.coins, levelAfter, Math.max(1, Math.round(quest.xp / 10)), streak, today, quest.child_id);
 
     db.prepare("UPDATE quests SET status = 'approved', approved_at = datetime('now') WHERE id = ?").run(questId);
+
+    if (quest.kind !== "once") {
+      const todayBase = localDateISO();
+      const nextDue = quest.kind === "daily" ? addDays(todayBase, 1) : addDays(todayBase, 7);
+      const nextId = `q_${crypto.randomUUID()}`;
+      db.prepare(
+        `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        nextId,
+        quest.child_id,
+        quest.title,
+        quest.description,
+        quest.kind,
+        quest.xp,
+        quest.coins,
+        quest.stat,
+        nextDue,
+        "system",
+        quest.approval,
+        quest.photos_required,
+      );
+      addQuestEvent(db, quest.child_id, nextId, "recurring_created", { from: questId, due: nextDue });
+    }
+
     addQuestEvent(db, quest.child_id, questId, "approved", {
       by: decidedBy,
       xp: quest.xp,
@@ -481,6 +555,7 @@ export type QuestOverview = {
 };
 
 export function questOverview(db: DB): QuestOverview {
+  refreshRecurring(db);
   const children = (db.prepare("SELECT id, name FROM children ORDER BY created_at").all() as { id: string; name: string }[]).map(
     (child) => ({
       id: child.id,

@@ -5,6 +5,7 @@ import app.familyos.guard.data.Policy
 import app.familyos.guard.data.QuestData
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.data.ProposalItem
+import app.familyos.guard.data.GeofenceDto
 import app.familyos.guard.data.UsageCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -77,6 +78,21 @@ class ApiClient(private val store: GuardStore) {
 
     suspend fun buyItem(itemId: String) = withContext(Dispatchers.IO) {
         call("POST", "/api/device/shop/$itemId/buy", JSONObject())
+        Unit
+    }
+
+    suspend fun geofences(): List<GeofenceDto> = withContext(Dispatchers.IO) {
+        val data = call("GET", "/api/device/geofences", null)
+        val arr = data.optJSONArray("data") ?: JSONArray()
+        (0 until arr.length()).map { GeofenceDto.fromJson(arr.getJSONObject(it)) }
+    }
+
+    suspend fun geofenceEvent(geofenceId: String, type: String) = withContext(Dispatchers.IO) {
+        call(
+            "POST",
+            "/api/device/geofences/event",
+            JSONObject().put("geofenceId", geofenceId).put("type", type),
+        )
         Unit
     }
 

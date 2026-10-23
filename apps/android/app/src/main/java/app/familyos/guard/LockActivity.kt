@@ -95,12 +95,24 @@ class LockActivity : ComponentActivity() {
                         Spacer(Modifier.height(28.dp))
 
                         if (reason != "bedtime") {
+                            val cost = policy?.extensionCost ?: 50
+                            val minutes = policy?.extensionMinutes ?: 30
+                            val coins = policy?.coins ?: 0
+                            Text(
+                                "У тебя $coins монет",
+                                color = if (coins >= cost) Color(0xFFFBBF24) else Color(0xFF8B9BB0),
+                                fontSize = 13.sp,
+                            )
+                            Spacer(Modifier.height(8.dp))
                             Button(
                                 onClick = { ask() },
-                                enabled = !busyAsk && !busyRefresh,
+                                enabled = !busyAsk && !busyRefresh && coins >= cost,
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text(if (busyAsk) "Отправляем…" else "Попросить ещё 15 минут")
+                                Text(
+                                    if (busyAsk) "Отправляем…"
+                                    else "Продлить на $minutes мин · $cost монет",
+                                )
                             }
                             Spacer(Modifier.height(10.dp))
                         } else {
@@ -171,7 +183,7 @@ class LockActivity : ComponentActivity() {
         if (busyAsk) return
         lifecycleScope.launch {
             busyAsk = true
-            runCatching { ApiClient(store).requestExtension(15, "Запрос с заблокированного экрана") }
+            runCatching { ApiClient(store).requestExtension(policy?.extensionMinutes ?: 30, "Запрос с заблокированного экрана") }
                 .onSuccess { message = "Запрос отправлен. Экран обновится после ответа родителя." }
                 .onFailure { message = it.message ?: "Не удалось отправить запрос" }
             busyAsk = false

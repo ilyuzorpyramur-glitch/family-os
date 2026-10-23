@@ -164,6 +164,8 @@ function flashBlock(flash: string | null): string {
     guard_policy: "Политика обновлена.",
     guard_approved: "Время разрешено.",
     guard_denied: "Запрос отклонён.",
+    geofence_added: "Геозона добавлена.",
+    geofence_deleted: "Геозона удалена.",
     quest_created: "Задание создано.",
     quest_approved: "Задание одобрено, награда начислена.",
     quest_denied: "Задание отклонено.",
@@ -419,6 +421,27 @@ export function guardPage(
             <form class="mini-form" method="post" action="/app/guard/children/${escapeHtml(child.id)}/devices" style="margin-top:10px">
               <div class="field"><label>Название телефона</label><input name="name" placeholder="Телефон Алисы" required></div>
               <button type="submit">Привязать</button>
+            </form>
+
+            <h3 style="margin-top:16px">Геозоны</h3>
+            ${(child.geofences ?? []).length
+              ? (child.geofences ?? [])
+                  .map(
+                    (g) => `<div class="li">
+                      <span>${escapeHtml(g.label)}<div class="sub">${g.lat.toFixed(5)}, ${g.lng.toFixed(5)} · ${g.radius_m} м</div></span>
+                      <form class="inline" method="post" action="/app/guard/geofences/${escapeHtml(g.id)}/delete">
+                        <button class="ghost" type="submit">Удалить</button>
+                      </form>
+                    </div>`,
+                  )
+                  .join("")
+              : `<div class="sub">Геозон нет.</div>`}
+            <form class="mini-form" method="post" action="/app/guard/children/${escapeHtml(child.id)}/geofences" style="margin-top:10px">
+              <div class="field"><label>Название</label><input name="label" placeholder="Школа" required></div>
+              <div class="field"><label>Широта</label><input name="lat" placeholder="52.2297" required></div>
+              <div class="field"><label>Долгота</label><input name="lng" placeholder="21.0122" required></div>
+              <div class="field"><label>Радиус, м</label><input name="radiusM" value="150" min="30" max="5000"></div>
+              <button type="submit">Добавить</button>
             </form>
           </section>`;
         })

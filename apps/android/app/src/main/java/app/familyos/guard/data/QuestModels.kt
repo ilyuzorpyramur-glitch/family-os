@@ -175,3 +175,25 @@ private fun JSONArray?.toShopItems(): List<ShopItem> {
     if (this == null) return emptyList()
     return (0 until length()).map { ShopItem.fromJson(getJSONObject(it)) }
 }
+
+data class GeofenceDto(
+    val id: String,
+    val label: String,
+    val lat: Double,
+    val lng: Double,
+    val radiusM: Int,
+    val notifyEnter: Boolean,
+    val notifyExit: Boolean,
+) {
+    companion object {
+        fun fromJson(o: JSONObject): GeofenceDto = GeofenceDto(
+            id = o.optString("id"),
+            label = o.optString("label"),
+            lat = o.optDouble("lat", 0.0),
+            lng = o.optDouble("lng", 0.0),
+            radiusM = o.optInt("radiusM", 150),
+            notifyEnter = o.optBoolean("notifyEnter", true),
+            notifyExit = o.optBoolean("notifyExit", true),
+        )
+    }
+}

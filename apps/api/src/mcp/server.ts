@@ -6,7 +6,7 @@ import { isValidISODate, monthStartISO, todayISO } from "../lib/time.js";
 import { listAccounts } from "../repo/accounts.js";
 import { listCategories } from "../repo/categories.js";
 import { balanceByCurrency, listTransactions, saveTransaction, summaryByCurrency } from "../repo/transactions.js";
-import { decideExtensionRequest, effectiveLimit, ensurePolicy, guardOverview, listChildren, listEvents, updatePolicy } from "../repo/guard.js";
+import { createGeofence, decideExtensionRequest, effectiveLimit, ensurePolicy, guardOverview, listChildren, listEvents, listGeofences, updatePolicy } from "../repo/guard.js";
 import { completeQuest, createQuest, createShopItem, decidePurchase, decideQuest, listProposals, listPurchases, listQuests, listShopItems, priceProposal, profileView, questOverview, questPhotos } from "../repo/quest.js";
 import { imageUrl } from "../uploads.js";
 import { getZenMoneyToken } from "../repo/settings.js";
@@ -216,6 +216,31 @@ const TOOLS = [
         priceCoins: { type: "integer", minimum: 1, maximum: 100000 },
       },
       required: ["proposalId", "priceCoins"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "geofence_list",
+    description: "Геозоны ребёнка: места и радиусы.",
+    inputSchema: {
+      type: "object",
+      properties: { childId: { type: "string" } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "geofence_add",
+    description: "Добавить геозону ребёнку (школа, дом, секция).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        childId: { type: "string" },
+        label: { type: "string" },
+        lat: { type: "number" },
+        lng: { type: "number" },
+        radiusM: { type: "integer", minimum: 30, maximum: 5000 },
+      },
+      required: ["childId", "label", "lat", "lng"],
       additionalProperties: false,
     },
   },
@@ -577,6 +602,26 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
           proposal: result.proposal,
           item: { ...result.item, photoUrl: imageUrl(config.publicUrl, result.item.photo_path) },
         };
+      }
+
+      case "geofence_list": {
+        const childId = args.childId as string | undefined;
+        return { geofences: listGeofences(db, childId) };
+      }
+
+      case "geofence_add": {
+        const body = z
+          .object({
+            childId: z.string(),
+            label: z.string().min(1),
+            lat: z.number().min(-90).max(90),
+            lng: z.number().min(-180).max(180),
+            radiusM: z.number().int().min(30).max(5000).optional(),
+          })
+          .safeParse(args);
+        if (!body.success) throw new Error(body.error.issues[0]?.message ?? "Некорректные аргументы");
+        if (!listChildren(db).some((c) => c.id === body.data.childId)) throw new Error("Ребёнок не найден");
+        return createGeofence(db, body.data);
       }
 
       default:

@@ -45,6 +45,7 @@ export type ExtensionRequestRow = {
   device_id: string | null;
   minutes: number;
   reason: string | null;
+  cost_coins: number;
   status: string;
   decided_by: string | null;
   decided_at: string | null;
@@ -203,15 +204,18 @@ export function listEvents(db: DB, childId?: string, limit = 50): GuardEventRow[
 
 export function createExtensionRequest(
   db: DB,
-  input: { childId: string; deviceId?: string | null; minutes: number; reason?: string | null },
+  input: { childId: string; deviceId?: string | null; minutes: number; reason?: string | null; costCoins?: number },
 ): ExtensionRequestRow {
   const id = `req_${crypto.randomUUID()}`;
-  db.prepare("INSERT INTO extension_requests (id, child_id, device_id, minutes, reason) VALUES (?, ?, ?, ?, ?)").run(
+  db.prepare(
+    "INSERT INTO extension_requests (id, child_id, device_id, minutes, reason, cost_coins) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(
     id,
     input.childId,
     input.deviceId ?? null,
     Math.max(1, Math.min(240, Math.round(input.minutes))),
     input.reason ?? null,
+    Math.max(0, Math.round(input.costCoins ?? 0)),
   );
   return db.prepare("SELECT * FROM extension_requests WHERE id = ?").get(id) as ExtensionRequestRow;
 }
@@ -250,6 +254,11 @@ export function decideExtensionRequest(
       db.prepare("UPDATE guard_policies SET extra_minutes = ?, extra_date = ?, updated_at = datetime('now') WHERE child_id = ?").run(
         base + minutes,
         today,
+        request.child_id,
+      );
+    } else if (request.cost_coins > 0) {
+      db.prepare("UPDATE character_profiles SET coins = coins + ?, updated_at = datetime('now') WHERE child_id = ?").run(
+        request.cost_coins,
         request.child_id,
       );
     }
@@ -295,6 +304,49 @@ function toMinutes(value: string): number | null {
   return hours * 60 + minutes;
 }
 
+export type GeofenceRow = {
+  id: string;
+  child_id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  radius_m: number;
+  notify_enter: number;
+  notify_exit: number;
+};
+
+export function listGeofences(db: DB, childId?: string): GeofenceRow[] {
+  if (childId) {
+    return db.prepare("SELECT * FROM geofences WHERE child_id = ? ORDER BY created_at").all(childId) as GeofenceRow[];
+  }
+  return db.prepare("SELECT * FROM geofences ORDER BY created_at").all() as GeofenceRow[];
+}
+
+export function createGeofence(
+  db: DB,
+  input: { childId: string; label: string; lat: number; lng: number; radiusM?: number; notifyEnter?: boolean; notifyExit?: boolean },
+): GeofenceRow {
+  const id = `geo_${crypto.randomUUID()}`;
+  db.prepare(
+    `INSERT INTO geofences (id, child_id, label, lat, lng, radius_m, notify_enter, notify_exit)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    input.childId,
+    input.label.trim(),
+    input.lat,
+    input.lng,
+    Math.max(30, Math.min(5000, Math.round(input.radiusM ?? 150))),
+    input.notifyEnter === false ? 0 : 1,
+    input.notifyExit === false ? 0 : 1,
+  );
+  return db.prepare("SELECT * FROM geofences WHERE id = ?").get(id) as GeofenceRow;
+}
+
+export function deleteGeofence(db: DB, id: string): boolean {
+  return db.prepare("DELETE FROM geofences WHERE id = ?").run(id).changes > 0;
+}
+
 export type GuardOverview = {
   date: string;
   children: {
@@ -307,6 +359,7 @@ export type GuardOverview = {
     devices: { id: string; name: string; lastSeenAt: string | null; status: string }[];
     pendingRequests: ExtensionRequestRow[];
     lastEvent: GuardEventRow | null;
+    geofences: GeofenceRow[];
   }[];
 };
 
@@ -331,6 +384,7 @@ export function guardOverview(db: DB): GuardOverview {
       })),
       pendingRequests: listExtensionRequests(db, "pending").filter((r) => r.child_id === child.id),
       lastEvent: listEvents(db, child.id, 1)[0] ?? null,
+      geofences: listGeofences(db, child.id),
     };
   });
   return { date, children };
