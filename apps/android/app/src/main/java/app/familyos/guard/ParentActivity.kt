@@ -21,7 +21,7 @@ class ParentActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(0xFF34D399),
+                    primary = Color(android.graphics.Color.parseColor(BuildConfig.ACCENT)),
                     background = Color(0xFF0B0F14),
                     surface = Color(0xFF121922),
                     onSurface = Color(0xFFE6EDF3),

@@ -88,6 +88,45 @@ CREATE TABLE IF NOT EXISTS agent_calls (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS products (
+  id           TEXT PRIMARY KEY,
+  title        TEXT NOT NULL,
+  barcode      TEXT,
+  unit         TEXT NOT NULL DEFAULT 'шт',
+  quantity     REAL NOT NULL DEFAULT 0,
+  min_quantity REAL NOT NULL DEFAULT 0,
+  kcal         REAL,
+  protein      REAL,
+  fat          REAL,
+  carbs        REAL,
+  image_url    TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_products_barcode ON products(barcode);
+
+CREATE TABLE IF NOT EXISTS recipes (
+  id          TEXT PRIMARY KEY,
+  title       TEXT NOT NULL,
+  description TEXT,
+  servings    INTEGER NOT NULL DEFAULT 2,
+  minutes     INTEGER NOT NULL DEFAULT 30,
+  steps       TEXT NOT NULL,
+  created_by  TEXT NOT NULL DEFAULT 'parent',
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS recipe_items (
+  id         TEXT PRIMARY KEY,
+  recipe_id  TEXT NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  product_id TEXT REFERENCES products(id),
+  title      TEXT NOT NULL,
+  quantity   REAL NOT NULL,
+  unit       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_items_recipe ON recipe_items(recipe_id);
+
 CREATE TABLE IF NOT EXISTS crash_reports (
   id         TEXT PRIMARY KEY,
   child_id   TEXT,

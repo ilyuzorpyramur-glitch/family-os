@@ -27,7 +27,7 @@
         android:theme="@style/Theme.FamilyOS">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".LauncherActivity"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -35,6 +35,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:label="@string/app_name" />
 
         <activity
             android:name=".admin.ProvisioningActivity"

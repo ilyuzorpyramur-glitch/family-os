@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Family OS Guard</string>
     <string name="accessibility_label">Family OS Guard</string>
     <string name="accessibility_description">Ограничивает приложения по лимиту экранного времени и расписанию. Не читает содержимое экрана.</string>
     <string name="channel_guard">Family OS Guard</string>

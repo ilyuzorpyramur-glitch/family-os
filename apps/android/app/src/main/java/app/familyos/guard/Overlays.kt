@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Lock
@@ -54,6 +55,7 @@ private val barItems = listOf(
     BarItem("Главная", Icons.Filled.Home),
     BarItem("Задания", Icons.Filled.List),
     BarItem("Магазин", Icons.Filled.ShoppingCart),
+    BarItem("Еда", Icons.Filled.Favorite),
     BarItem("Щит", Icons.Filled.Lock),
     BarItem("Профиль", Icons.Filled.Person),
 )
@@ -109,7 +111,7 @@ private fun BarButton(item: BarItem, selected: Boolean, modifier: Modifier, onCl
         Text(
             item.label,
             color = if (selected) Color(0xFF34D399) else BarMuted,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
         )

@@ -51,7 +51,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-private val PAccent = Color(0xFF34D399)
+private val PAccent = Color(android.graphics.Color.parseColor(app.familyos.guard.BuildConfig.ACCENT))
 private val PGold = Color(0xFFFBBF24)
 private val PMuted = Color(0xFF8B9BB0)
 private val PRed = Color(0xFFF87171)
@@ -186,6 +186,11 @@ fun ParentApp(
                     },
                     onRefresh = { scope.launch { busy = true; loadAll(); busy = false } },
                 )
+                4 -> ParentPantryScreen(
+                    busy = busy,
+                    onRefresh = { scope.launch { busy = true; loadAll(); busy = false } },
+                    api = { api() },
+                )
                 else -> ParentChildrenScreen(
                     children = children,
                     busy = busy,
@@ -230,6 +235,7 @@ fun ParentApp(
             PTab("Обзор", tab == 1) { tab = 1 }
             PTab("Деньги", tab == 2) { tab = 2 }
             PTab("События", tab == 3) { tab = 3 }
+            PTab("Склад", tab == 4) { tab = 4 }
             PTab("Дети", tab == 0) { tab = 0 }
         }
     }
@@ -765,6 +771,128 @@ private fun ParentChildrenScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ParentPantryScreen(
+    busy: Boolean,
+    onRefresh: () -> Unit,
+    api: () -> ParentApi,
+) {
+    var products by remember { mutableStateOf<List<app.familyos.guard.data.Product>>(emptyList()) }
+    var barcode by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf("1") }
+    var status by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun reload() {
+        runCatching { products = app.familyos.guard.data.Product.listFrom(api().get("/api/products")) }
+            .onFailure { status = it.message }
+    }
+
+    LaunchedEffect(Unit) { reload() }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Склад", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            TextButton(onClick = { scope.launch { onRefresh(); reload() } }, enabled = !busy) { Text("Обновить") }
+        }
+        status?.let { Text(it, color = PAccent, fontSize = 12.sp) }
+
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Сканер штрихкода", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                OutlinedTextField(
+                    barcode,
+                    { barcode = it },
+                    label = { Text("Штрихкод") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Button(
+                    onClick = {
+                        val code = barcode.trim()
+                        if (code.length >= 4) {
+                            scope.launch {
+                                val result = runCatching {
+                                    api().post("/api/products/scan", JSONObject().put("barcode", code).put("quantity", 1))
+                                }
+                                status = result.fold(
+                                    { "Добавлено: " + (it.optJSONObject("data")?.optJSONObject("product")?.optString("title") ?: "товар") },
+                                    { "Ошибка: ${it.message}" },
+                                )
+                                barcode = ""
+                                reload()
+                            }
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Найти и добавить") }
+                Text("Берём название и КБЖУ из Open Food Facts.", color = PMuted, fontSize = 10.sp)
+            }
+        }
+
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Добавить вручную", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                OutlinedTextField(title, { title = it }, label = { Text("Название") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(quantity, { quantity = it }, label = { Text("Количество") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Button(
+                    onClick = {
+                        if (title.isNotBlank()) {
+                            scope.launch {
+                                runCatching {
+                                    api().post(
+                                        "/api/products",
+                                        JSONObject()
+                                            .put("title", title.trim())
+                                            .put("quantity", quantity.replace(',', '.').toDoubleOrNull() ?: 1.0),
+                                    )
+                                }.onFailure { status = it.message }
+                                title = ""
+                                reload()
+                            }
+                        }
+                    },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Добавить продукт") }
+            }
+        }
+
+        Text("На складе: ${products.size}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        products.forEach { product ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(product.title, fontSize = 13.sp, maxLines = 1)
+                        val kbju = listOfNotNull(
+                            product.kcal?.let { "%.0f ккал".format(it) },
+                            product.protein?.let { "Б %.0f".format(it) },
+                            product.fat?.let { "Ж %.0f".format(it) },
+                            product.carbs?.let { "У %.0f".format(it) },
+                        ).joinToString(" · ")
+                        if (kbju.isNotBlank()) Text(kbju, color = PMuted, fontSize = 10.sp)
+                    }
+                    Text(
+                        "%.1f %s".format(product.quantity, product.unit),
+                        color = if (product.quantity > 0) PAccent else PRed,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(50.dp))
     }
 }
 

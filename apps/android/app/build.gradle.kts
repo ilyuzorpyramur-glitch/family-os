@@ -9,11 +9,32 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.familyos.guard"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
+        buildConfigField("String", "SERVER_HINT", "\"https://herb-rosa-moscow-checking.trycloudflare.com\"")
+    }
+
+    // Два приложения из одного кода: детское (зелёное) и родительское (бирюзовое).
+    flavorDimensions += "role"
+    productFlavors {
+        create("child") {
+            dimension = "role"
+            applicationId = "app.familyos.guard"
+            resValue("string", "app_name", "Family OS")
+            buildConfigField("String", "ROLE", "\"child\"")
+            buildConfigField("String", "ACCENT", "\"#34D399\"")
+            buildConfigField("String", "ACCENT_DARK", "\"#10352A\"")
+        }
+        create("parent") {
+            dimension = "role"
+            applicationId = "app.familyos.parent"
+            resValue("string", "app_name", "Family OS Parent")
+            buildConfigField("String", "ROLE", "\"parent\"")
+            buildConfigField("String", "ACCENT", "\"#2DD4BF\"")
+            buildConfigField("String", "ACCENT_DARK", "\"#0E3B3A\"")
+        }
     }
 
     signingConfigs {
@@ -46,6 +67,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {

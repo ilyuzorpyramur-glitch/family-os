@@ -29,12 +29,24 @@ jobs:
 
       - name: Build
         working-directory: apps/android
-        run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
+        run: >-
+          gradle :app:testChildDebugUnitTest
+          :app:assembleChildDebug
+          :app:assembleParentDebug
+          --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Upload child APK
         uses: actions/upload-artifact@v4
         with:
-          name: family-os-guard-debug
-          path: apps/android/app/build/outputs/apk/debug/*.apk
+          name: family-os-child-debug
+          path: apps/android/app/build/outputs/apk/child/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload parent APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: family-os-parent-debug
+          path: apps/android/app/build/outputs/apk/parent/debug/*.apk
           if-no-files-found: error
           retention-days: 30

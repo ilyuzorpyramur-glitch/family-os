@@ -9,6 +9,8 @@ import app.familyos.guard.data.GeofenceDto
 import app.familyos.guard.data.HomeData
 import app.familyos.guard.data.ProfileData
 import app.familyos.guard.data.CalendarData
+import app.familyos.guard.data.Product
+import app.familyos.guard.data.Recipe
 import app.familyos.guard.data.UsageCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -117,6 +119,23 @@ class ApiClient(private val store: GuardStore) {
         if (lat != null && lng != null) body.put("lat", lat).put("lng", lng)
         call("POST", "/api/device/child-events", body)
         Unit
+    }
+
+    suspend fun recipes(): List<Recipe> = withContext(Dispatchers.IO) {
+        Recipe.listFrom(call("GET", "/api/device/recipes", null))
+    }
+
+    suspend fun cookRecipe(id: String): JSONObject = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/recipes/$id/cook", JSONObject()).optJSONObject("data") ?: JSONObject()
+    }
+
+    suspend fun products(): List<Product> = withContext(Dispatchers.IO) {
+        Product.listFrom(call("GET", "/api/device/products", null))
+    }
+
+    suspend fun scanBarcode(barcode: String): JSONObject = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/products/scan", JSONObject().put("barcode", barcode).put("quantity", 1))
+            .optJSONObject("data") ?: JSONObject()
     }
 
     suspend fun profile(): ProfileData = withContext(Dispatchers.IO) {

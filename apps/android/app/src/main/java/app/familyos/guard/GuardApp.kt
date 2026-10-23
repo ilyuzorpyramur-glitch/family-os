@@ -14,7 +14,9 @@ class GuardApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashReporter.install(this)
-        runCatching { scheduleSync(this) }
+        if (BuildConfig.ROLE == "child") {
+            runCatching { scheduleSync(this) }
+        }
     }
 
     companion object {

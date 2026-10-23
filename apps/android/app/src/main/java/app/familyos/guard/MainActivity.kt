@@ -70,7 +70,9 @@ import android.content.ClipboardManager
 import app.familyos.guard.data.Policy
 import app.familyos.guard.data.CalendarData
 import app.familyos.guard.data.HomeData
+import app.familyos.guard.data.Product
 import app.familyos.guard.data.ProfileData
+import app.familyos.guard.data.Recipe
 import app.familyos.guard.data.QuestData
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.service.AppBlockService
@@ -102,6 +104,8 @@ class MainActivity : ComponentActivity() {
     private var home by mutableStateOf<HomeData?>(null)
     private var profile by mutableStateOf<ProfileData?>(null)
     private var calendar by mutableStateOf<CalendarData?>(null)
+    private var recipes by mutableStateOf<List<Recipe>>(emptyList())
+    private var products by mutableStateOf<List<Product>>(emptyList())
     private var levelUpLevel by mutableStateOf<Int?>(null)
     private var lastLevel by mutableStateOf<Int?>(null)
     private var pendingQuestId by mutableStateOf<String?>(null)
@@ -168,7 +172,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(0xFF34D399),
+                    primary = Color(android.graphics.Color.parseColor(BuildConfig.ACCENT)),
                     background = Color(0xFF0B0F14),
                     surface = Color(0xFF121922),
                     onSurface = Color(0xFFE6EDF3),
@@ -209,7 +213,15 @@ class MainActivity : ComponentActivity() {
                                         onPickPhoto = { startProposalPhoto() },
                                         onPropose = { title, description -> proposeItem(title, description) },
                                     )
-                                    3 -> Dashboard(
+                                    3 -> RecipesScreen(
+                                        recipes = recipes,
+                                        products = products,
+                                        busy = busy,
+                                        message = message,
+                                        onCook = { cookRecipe(it) },
+                                        onRefresh = { refresh() },
+                                    )
+                                    4 -> Dashboard(
                                         state = state,
                                         busy = busy,
                                         message = message,
@@ -315,6 +327,8 @@ class MainActivity : ComponentActivity() {
             }
             runCatching { api.profile() }.onSuccess { profile = it }
             runCatching { api.calendar(YearMonth.now().toString()) }.onSuccess { calendar = it }
+            runCatching { api.recipes() }.onSuccess { recipes = it }
+            runCatching { api.products() }.onSuccess { products = it }
             flushOutbox(api)
             reportPendingCrash()
             busy = false
@@ -374,6 +388,25 @@ class MainActivity : ComponentActivity() {
                 }.isSuccess
                 if (ok) offline.remove(item) else break
             }
+        }
+    }
+
+    private fun cookRecipe(id: String) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                val result = api.cookRecipe(id)
+                recipes = api.recipes()
+                products = api.products()
+                val missing = result.optJSONArray("missing")
+                message = if (missing != null && missing.length() > 0) {
+                    "Не всё нашлось: " + (0 until missing.length()).joinToString(", ") { missing.optString(it) }
+                } else {
+                    "Приготовлено, продукты списаны"
+                }
+            }.onFailure { message = it.message }
+            busy = false
         }
     }
 

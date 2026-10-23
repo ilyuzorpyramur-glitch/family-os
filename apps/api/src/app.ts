@@ -12,6 +12,7 @@ import { registerGuardApi } from "./routes/guard.js";
 import { registerQuestApi } from "./routes/quest.js";
 import { registerEventsApi } from "./routes/events.js";
 import { registerBankApi } from "./routes/bank.js";
+import { registerPantryApi } from "./routes/pantry.js";
 import { registerWeb } from "./routes/web.js";
 import { registerMcp } from "./mcp/server.js";
 
@@ -47,6 +48,7 @@ export async function buildApp({ config, db, logger = false }: AppOptions): Prom
   registerQuestApi(app, { config, db });
   registerEventsApi(app, { config, db });
   registerBankApi(app, { config, db });
+  registerPantryApi(app, { config, db });
   registerMcp(app, { config, db });
   registerWeb(app, { config, db });
 
