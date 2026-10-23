@@ -37,6 +37,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.familyos.guard.data.CalendarData
+import app.familyos.guard.data.GeofenceStatus
 import app.familyos.guard.data.HomeData
 import app.familyos.guard.data.ProfileData
 import coil.compose.AsyncImage
@@ -48,11 +50,15 @@ private val Muted = Color(0xFF8B9BB0)
 @Composable
 fun HomeScreen(
     home: HomeData?,
+    calendar: CalendarData?,
     busy: Boolean,
     message: String?,
     onRefresh: () -> Unit,
     onOpenProfile: () -> Unit,
+    onAddEvent: (title: String, geofenceId: String?, date: String, start: String, minutes: Int) -> Unit,
 ) {
+    var selectedDate by remember { mutableStateOf(java.time.LocalDate.now().toString()) }
+    var showAdd by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -121,6 +127,51 @@ fun HomeScreen(
             MetricCard("Стрик", "${home?.streak ?: 0} дн.", Modifier.weight(1f))
         }
 
+        val dayInfo = calendar?.days?.firstOrNull { it.date == selectedDate }
+        MonthCalendar(calendar = calendar, selected = selectedDate, onSelect = { selectedDate = it })
+
+        val dayEvents = dayInfo?.events.orEmpty()
+        if (dayEvents.isNotEmpty()) {
+            Text("События на $selectedDate", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            dayEvents.forEach { event ->
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(event.title)
+                            Text(
+                                "${event.startTime} · ${event.durationMin} мин",
+                                color = Muted,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Text(
+                            when (event.status) {
+                                "approved" -> "одобрено"
+                                "pending" -> "на проверке"
+                                else -> "отклонено"
+                            },
+                            color = when (event.status) {
+                                "approved" -> Accent
+                                "pending" -> Gold
+                                else -> Color(0xFFF87171)
+                            },
+                            fontSize = 11.sp,
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { showAdd = true }, modifier = Modifier.weight(1f)) {
+                Text("Событие на $selectedDate")
+            }
+        }
+
         val fences = home?.geofences.orEmpty()
         if (fences.isNotEmpty()) {
             Text("Геозоны", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -165,6 +216,19 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+
+        if (showAdd) {
+            AddEventDialog(
+                defaultDate = selectedDate,
+                geofences = fences,
+                busy = busy,
+                onDismiss = { showAdd = false },
+                onSubmit = { title, geofenceId, date, start, minutes ->
+                    onAddEvent(title, geofenceId, date, start, minutes)
+                    showAdd = false
+                },
+            )
         }
     }
 }

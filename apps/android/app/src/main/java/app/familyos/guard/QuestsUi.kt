@@ -1,6 +1,8 @@
 package app.familyos.guard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,12 +11,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,7 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -219,161 +227,245 @@ fun ShopScreen(
     onPickPhoto: () -> Unit,
     onPropose: (String, String) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (message != null) {
-            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1708))) {
-                Text(message, modifier = Modifier.padding(12.dp), color = Color(0xFFFDE68A))
-            }
-        }
+    var showProposal by remember { mutableStateOf(false) }
+    val coins = shop?.profile?.coins ?: 0
+    val items = shop?.items.orEmpty()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column {
-                Text("Магазин", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "У тебя ${shop?.profile?.coins ?: 0} монет",
-                    color = Color(0xFFFBBF24),
-                    fontSize = 13.sp,
-                )
+            if (message != null) {
+                Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1708))) {
+                    Text(message, Modifier.padding(12.dp), color = Color(0xFFFDE68A))
+                }
             }
-            TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
+
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            ) {
+                Column(
+                    Modifier
+                        .background(Brush.linearGradient(listOf(Color(0xFF3A2A08), Color(0xFF151B24))))
+                        .padding(18.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column {
+                            Text("Магазин", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE6EDF3))
+                            Text("Трать монеты на награды", color = Color(0xFFB9A472), fontSize = 12.sp)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("$coins", color = Color(0xFFFBBF24), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                            Text("монет", color = Color(0xFFFBBF24), fontSize = 11.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
+                }
+            }
+
+            if (items.isEmpty()) {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Text(
+                        "Пока пусто. Нажми «Предложить», чтобы попросить награду.",
+                        Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                items.chunked(2).forEach { row ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        row.forEach { item ->
+                            ShopTile(item, coins, busy, onBuy, Modifier.weight(1f))
+                        }
+                        if (row.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+
+            val proposals = shop?.proposals.orEmpty()
+            if (proposals.isNotEmpty()) {
+                Text("Мои предложения", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                proposals.forEach { proposal ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(proposal.title)
+                                proposal.description?.let {
+                                    Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                }
+                            }
+                            Text(
+                                when (proposal.status) {
+                                    "pending" -> "ждёт цену"
+                                    "priced" -> "${proposal.priceCoins ?: 0} монет"
+                                    else -> "отклонено"
+                                },
+                                color = Color(0xFFFBBF24),
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+                }
+            }
+
+            val pending = shop?.pending.orEmpty()
+            if (pending.isNotEmpty()) {
+                Text("Ожидают подтверждения", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                pending.forEach { buy ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(buy.title)
+                            Text("${buy.priceCoins} монет", color = Color(0xFFFBBF24))
+                        }
+                    }
+                }
+            }
         }
 
-        val items = shop?.items.orEmpty()
-        if (items.isEmpty()) {
-            Text("Пока пусто. Родитель скоро добавит награды.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-            items.forEach { item ->
-                ShopItemCard(item, shop?.profile?.coins ?: 0, busy, onBuy)
-            }
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .padding(18.dp),
+        ) {
+            AddFab { showProposal = true }
         }
+    }
 
-        Text("Предложить свой товар", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        var title by remember { mutableStateOf("") }
-        var description by remember { mutableStateOf("") }
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(14.dp)) {
-                androidx.compose.material3.OutlinedTextField(
+    if (showProposal) {
+        ProposalDialog(
+            photo = proposalPhoto,
+            busy = busy,
+            onPickPhoto = onPickPhoto,
+            onDismiss = { showProposal = false },
+            onSubmit = { title, description ->
+                onPropose(title, description)
+                showProposal = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun ProposalDialog(
+    photo: String?,
+    busy: Boolean,
+    onPickPhoto: () -> Unit,
+    onDismiss: () -> Unit,
+    onSubmit: (String, String) -> Unit,
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Предложить награду") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Что хочешь купить") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(8.dp))
-                androidx.compose.material3.OutlinedTextField(
+                OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Описание (необязательно)") },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onPickPhoto, enabled = !busy) {
-                        Text(if (proposalPhoto == null) "Фото" else "Фото добавлено")
-                    }
-                    Button(
-                        onClick = { onPropose(title, description); title = ""; description = "" },
-                        enabled = !busy && title.isNotBlank(),
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("Отправить OpenClaw")
-                    }
+                Button(onClick = onPickPhoto, enabled = !busy) {
+                    Text(if (photo == null) "Добавить фото" else "Фото добавлено")
                 }
                 Text(
-                    "OpenClaw посмотрит товар и назначит цену в монетах.",
+                    "OpenClaw посмотрит товар и назначит цену в монетах, родитель подтвердит.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                 )
             }
-        }
-
-        val proposals = shop?.proposals.orEmpty()
-        if (proposals.isNotEmpty()) {
-            Text("Мои предложения", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            proposals.forEach { proposal ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(proposal.title)
-                            proposal.description?.let {
-                                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-                            }
-                        }
-                        Text(
-                            when (proposal.status) {
-                                "pending" -> "ждёт цену"
-                                "priced" -> "${proposal.priceCoins ?: 0} монет"
-                                else -> "отклонено"
-                            },
-                            color = Color(0xFFFBBF24),
-                            fontSize = 12.sp,
-                        )
-                    }
-                }
-            }
-        }
-
-        val pending = shop?.pending.orEmpty()
-        if (pending.isNotEmpty()) {
-            Text("Ожидают подтверждения", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            pending.forEach { buy ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(buy.title)
-                        Text("${buy.priceCoins} монет", color = Color(0xFFFBBF24))
-                    }
-                }
-            }
-        }
-    }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSubmit(title, description) },
+                enabled = !busy && title.isNotBlank(),
+            ) { Text("Отправить") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+    )
 }
 
 @Composable
-private fun ShopItemCard(item: ShopItem, coins: Int, busy: Boolean, onBuy: (String) -> Unit) {
+private fun ShopTile(
+    item: ShopItem,
+    coins: Int,
+    busy: Boolean,
+    onBuy: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val canAfford = coins >= item.priceCoins
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(14.dp)) {
-            item.photoUrl?.let { url ->
-                AsyncImage(
-                    model = url,
-                    contentDescription = item.title,
-                    modifier = Modifier.fillMaxWidth().height(140.dp),
-                )
-                Spacer(Modifier.height(6.dp))
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF0F151D)),
+                contentAlignment = Alignment.Center,
+            ) {
+                val url = item.photoUrl
+                if (url.isNullOrBlank()) {
+                    Text("🎁", fontSize = 34.sp)
+                } else {
+                    AsyncImage(
+                        model = url,
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
-            Text(item.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Text(item.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
             item.description?.let {
-                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Text(it, color = Color(0xFF8B9BB0), fontSize = 11.sp, maxLines = 2)
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "${item.priceCoins} монет" + (item.stock?.let { " · осталось $it" } ?: ""),
-                color = if (canAfford) Color(0xFFFBBF24) else Color(0xFF8B9BB0),
+                "${item.priceCoins} монет",
+                color = if (canAfford) Color(0xFFFBBF24) else Color(0xFF6E7E92),
                 fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
             )
-            Spacer(Modifier.height(10.dp))
+            item.stock?.let { Text("осталось $it", color = Color(0xFF6E7E92), fontSize = 10.sp) }
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = { onBuy(item.id) },
                 enabled = !busy && canAfford,
                 modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
             ) {
-                Text(if (canAfford) "Купить" else "Не хватает монет")
+                Text(if (canAfford) "Купить" else "дорого", fontSize = 12.sp)
             }
         }
     }

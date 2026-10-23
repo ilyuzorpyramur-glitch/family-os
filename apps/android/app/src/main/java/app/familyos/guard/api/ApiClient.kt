@@ -8,6 +8,7 @@ import app.familyos.guard.data.ProposalItem
 import app.familyos.guard.data.GeofenceDto
 import app.familyos.guard.data.HomeData
 import app.familyos.guard.data.ProfileData
+import app.familyos.guard.data.CalendarData
 import app.familyos.guard.data.UsageCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -90,6 +91,17 @@ class ApiClient(private val store: GuardStore) {
 
     suspend fun home(): HomeData = withContext(Dispatchers.IO) {
         HomeData.fromJson(call("GET", "/api/device/home", null))
+    }
+
+    suspend fun calendar(month: String): CalendarData = withContext(Dispatchers.IO) {
+        CalendarData.fromJson(call("GET", "/api/device/calendar?month=$month", null))
+    }
+
+    suspend fun createEvent(title: String, geofenceId: String?, date: String, startTime: String, durationMin: Int) = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("title", title).put("date", date).put("startTime", startTime).put("durationMin", durationMin)
+        if (geofenceId != null) body.put("geofenceId", geofenceId)
+        call("POST", "/api/device/child-events", body)
+        Unit
     }
 
     suspend fun profile(): ProfileData = withContext(Dispatchers.IO) {

@@ -138,3 +138,52 @@ data class ProfileData(
         }
     }
 }
+
+data class CalendarEvent(
+    val id: String,
+    val title: String,
+    val startTime: String,
+    val durationMin: Int,
+    val status: String,
+)
+
+data class CalendarDay(
+    val date: String,
+    val questsDone: Int,
+    val questsPlanned: Int,
+    val events: List<CalendarEvent>,
+)
+
+data class CalendarData(
+    val month: String,
+    val days: List<CalendarDay>,
+) {
+    companion object {
+        fun fromJson(root: JSONObject): CalendarData {
+            val data = root.getJSONObject("data")
+            val days = data.optJSONArray("days") ?: org.json.JSONArray()
+            return CalendarData(
+                month = data.optString("month"),
+                days = (0 until days.length()).map { i ->
+                    val d = days.getJSONObject(i)
+                    val events = d.optJSONArray("events") ?: org.json.JSONArray()
+                    CalendarDay(
+                        date = d.optString("date"),
+                        questsDone = d.optInt("questsDone", 0),
+                        questsPlanned = d.optInt("questsPlanned", 0),
+                        events = (0 until events.length()).map { j ->
+                            val e = events.getJSONObject(j)
+                            CalendarEvent(
+                                id = e.optString("id"),
+                                title = e.optString("title"),
+                                startTime = e.optString("startTime"),
+                                durationMin = e.optInt("durationMin", 60),
+                                status = e.optString("status"),
+                            )
+                        },
+                    )
+                },
+            )
+        }
+    }
+}

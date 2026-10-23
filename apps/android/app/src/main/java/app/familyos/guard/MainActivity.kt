@@ -63,6 +63,7 @@ import app.familyos.guard.admin.GuardDeviceAdmin
 import app.familyos.guard.api.ApiClient
 import app.familyos.guard.data.GuardStore
 import app.familyos.guard.data.Policy
+import app.familyos.guard.data.CalendarData
 import app.familyos.guard.data.HomeData
 import app.familyos.guard.data.ProfileData
 import app.familyos.guard.data.QuestData
@@ -93,6 +94,9 @@ class MainActivity : ComponentActivity() {
     private var shop by mutableStateOf<ShopData?>(null)
     private var home by mutableStateOf<HomeData?>(null)
     private var profile by mutableStateOf<ProfileData?>(null)
+    private var calendar by mutableStateOf<CalendarData?>(null)
+    private var levelUpLevel by mutableStateOf<Int?>(null)
+    private var lastLevel by mutableStateOf<Int?>(null)
     private var pendingQuestId by mutableStateOf<String?>(null)
     private var proposalPhoto by mutableStateOf<String?>(null)
 
@@ -174,6 +178,10 @@ class MainActivity : ComponentActivity() {
                                         message = message,
                                         onRefresh = { refresh() },
                                         onOpenProfile = { tab = 4 },
+                                        calendar = calendar,
+                                        onAddEvent = { title, geofenceId, date, start, minutes ->
+                                            addEvent(title, geofenceId, date, start, minutes)
+                                        },
                                     )
                                     1 -> QuestsScreen(
                                         quests = quests,
@@ -213,20 +221,20 @@ class MainActivity : ComponentActivity() {
                                         onRefresh = { refresh() },
                                     )
                                 }
+                                levelUpLevel?.let { level ->
+                                    LevelUpDialog(
+                                        level = level,
+                                        xp = home?.xp ?: 0,
+                                        strength = home?.strength ?: 0,
+                                        intellect = home?.intellect ?: 0,
+                                        creativity = home?.creativity ?: 0,
+                                        kindness = home?.kindness ?: 0,
+                                        discipline = home?.discipline ?: 0,
+                                        onDismiss = { levelUpLevel = null },
+                                    )
+                                }
                             }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .navigationBarsPadding()
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                            ) {
-                                TabButton("Главная", tab == 0) { tab = 0 }
-                                TabButton("Задания", tab == 1) { tab = 1 }
-                                TabButton("Магазин", tab == 2) { tab = 2 }
-                                TabButton("Щит", tab == 3) { tab = 3 }
-                                TabButton("Профиль", tab == 4) { tab = 4 }
-                            }
+                            BottomBar(tab) { tab = it }
                         }
                     } else {
                         Setup(
@@ -283,8 +291,14 @@ class MainActivity : ComponentActivity() {
                 .onFailure { message = it.message }
             runCatching { api.quests() }.onSuccess { quests = it }
             runCatching { api.shop() }.onSuccess { shop = it }
-            runCatching { api.home() }.onSuccess { home = it }
+            runCatching { api.home() }.onSuccess { next ->
+                val previous = lastLevel
+                if (previous != null && next.level > previous) levelUpLevel = next.level
+                lastLevel = next.level
+                home = next
+            }
             runCatching { api.profile() }.onSuccess { profile = it }
+            runCatching { api.calendar(YearMonth.now().toString()) }.onSuccess { calendar = it }
             busy = false
             startTracking()
         }
@@ -328,6 +342,19 @@ class MainActivity : ComponentActivity() {
             }.onFailure {
                 message = it.message
             }
+            busy = false
+        }
+    }
+
+    private fun addEvent(title: String, geofenceId: String?, date: String, start: String, minutes: Int) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                api.createEvent(title, geofenceId, date, start, minutes)
+                calendar = api.calendar(YearMonth.now().toString())
+            }.onSuccess { message = "Событие отправлено родителю" }
+                .onFailure { message = it.message }
             busy = false
         }
     }
