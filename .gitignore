@@ -40,3 +40,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Debug keystore для воспроизводимой подписи APK
+!apps/android/keystore/debug.keystore
