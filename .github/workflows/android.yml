@@ -29,7 +29,7 @@ jobs:
 
       - name: Build
         working-directory: apps/android
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+        run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
