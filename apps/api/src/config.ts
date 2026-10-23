@@ -44,7 +44,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     adminToken: admin.value,
     agentToken: env.AGENT_TOKEN?.trim() || null,
     zenmoneyToken: env.ZENMONEY_TOKEN?.trim() || null,
-    baseCurrency: env.BASE_CURRENCY?.trim() || "PLN",
+    baseCurrency: env.BASE_CURRENCY?.trim() || "RUB",
     publicUrl: env.PUBLIC_URL?.trim() || `http://localhost:${env.PORT ?? 3001}`,
   };
 }

@@ -166,6 +166,15 @@ class ApiClient(private val store: GuardStore) {
         Unit
     }
 
+    suspend fun reportCrash(message: String, stack: String): Unit = withContext(Dispatchers.IO) {
+        call(
+            "POST",
+            "/api/device/crash",
+            JSONObject().put("message", message).put("stack", stack.take(8000)).put("appVersion", "0.1.0"),
+        )
+        Unit
+    }
+
     suspend fun rawCall(method: String, path: String, bodyJson: String): JSONObject = withContext(Dispatchers.IO) {
         val body = if (bodyJson.isBlank()) null else runCatching { JSONObject(bodyJson) }.getOrNull()
         call(method, path, body)

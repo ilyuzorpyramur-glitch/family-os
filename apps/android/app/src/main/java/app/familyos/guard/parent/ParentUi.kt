@@ -132,6 +132,7 @@ fun ParentApp(
                 }
                 2 -> ParentMoneyScreen(
                     money = money,
+                    api = { api() },
                     busy = busy,
                     currency = money?.currency ?: "RUB",
                     onAdd = { amount, kind, accountId, categoryId, payee ->
@@ -365,12 +366,17 @@ private fun ParentMoneyScreen(
     money: MoneyOverview?,
     busy: Boolean,
     currency: String,
+    api: () -> ParentApi,
     onAdd: (Double, String, String, String?, String) -> Unit,
     onAddAccount: (String, Double) -> Unit,
     onRefresh: () -> Unit,
 ) {
     var showTx by remember { mutableStateOf(false) }
     var showAccount by remember { mutableStateOf(false) }
+    var showCsv by remember { mutableStateOf(false) }
+    var showBank by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -380,6 +386,15 @@ private fun ParentMoneyScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Деньги", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterPill("Импорт выписки", false) { showCsv = true }
+                FilterPill("Банк", false) { showBank = true }
+            }
+
+            status?.let {
+                Text(it, color = PAccent, fontSize = 12.sp)
             }
 
             Card(
@@ -480,6 +495,91 @@ private fun ParentMoneyScreen(
             },
         )
     }
+    if (showCsv) {
+        var csv by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showCsv = false },
+            title = { Text("Импорт выписки") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Строки: дата;сумма;контрагент;комментарий", color = PMuted, fontSize = 11.sp)
+                    OutlinedTextField(
+                        csv,
+                        { csv = it },
+                        label = { Text("CSV") },
+                        minLines = 5,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val text = csv.trim()
+                        showCsv = false
+                        if (text.isNotEmpty()) {
+                            scope.launch {
+                                val result = runCatching {
+                                    api().post("/api/money/import/csv", JSONObject().put("csv", text))
+                                }
+                                status = result.fold(
+                                    { "Импортировано: " + it.optJSONObject("data")?.optInt("imported") },
+                                    { "Ошибка: ${it.message}" },
+                                )
+                                onRefresh()
+                            }
+                        }
+                    },
+                ) { Text("Импортировать") }
+            },
+            dismissButton = { TextButton(onClick = { showCsv = false }) { Text("Отмена") } },
+        )
+    }
+
+    if (showBank) {
+        var token by remember { mutableStateOf<String?>(null) }
+        var info by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) {
+            runCatching { api().get("/api/bank/status") }.onSuccess {
+                val data = it.optJSONObject("data")
+                info = if (data?.optBoolean("connected") == true) "Подключён: ${data.optString("masked")}" else "Не подключён"
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showBank = false },
+            title = { Text("Привязка банка") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(info ?: "Проверяем…", color = PMuted, fontSize = 12.sp)
+                    Text(
+                        "Создай токен и передай его агрегатору или своему скрипту: он будет присылать операции POST-запросом.",
+                        color = PMuted,
+                        fontSize = 11.sp,
+                    )
+                    token?.let {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0F151D))) {
+                            Text(it, Modifier.padding(10.dp), fontSize = 11.sp, color = PAccent)
+                        }
+                        Text("/api/bank/import", color = PMuted, fontSize = 11.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            runCatching { api().post("/api/bank/token") }.onSuccess {
+                                token = it.optJSONObject("data")?.optString("token")
+                                info = "Токен создан"
+                            }.onFailure { info = "Ошибка: ${it.message}" }
+                        }
+                    },
+                ) { Text(if (token == null) "Создать токен" else "Пересоздать") }
+            },
+            dismissButton = { TextButton(onClick = { showBank = false }) { Text("Закрыть") } },
+        )
+    }
+
     if (showAccount) {
         var title by remember { mutableStateOf("") }
         var balance by remember { mutableStateOf("0") }

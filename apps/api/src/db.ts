@@ -88,6 +88,16 @@ CREATE TABLE IF NOT EXISTS agent_calls (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS crash_reports (
+  id         TEXT PRIMARY KEY,
+  child_id   TEXT,
+  device_id  TEXT,
+  message    TEXT NOT NULL,
+  stack      TEXT,
+  app_version TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS bank_connections (
   id            TEXT PRIMARY KEY,
   provider      TEXT NOT NULL,

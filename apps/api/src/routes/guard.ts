@@ -131,6 +131,16 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
     }
   });
 
+  app.get("/api/guard/crashes", { preHandler: parentGuard }, async () => ({
+    ok: true,
+    data: db.prepare("SELECT * FROM crash_reports ORDER BY created_at DESC LIMIT 50").all(),
+  }));
+
+  app.delete("/api/guard/crashes", { preHandler: parentGuard }, async () => {
+    db.prepare("DELETE FROM crash_reports").run();
+    return { ok: true };
+  });
+
   app.get("/api/guard/children/:id/profile", { preHandler: parentGuard }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const child = getChildProfile(db, id);
@@ -306,6 +316,31 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
     } catch (error) {
       return reply.code(400).send({ ok: false, error: { code: "UPLOAD_FAILED", message: (error as Error).message } });
     }
+  });
+
+  app.post("/api/device/crash", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const body = z
+      .object({
+        message: z.string().max(500),
+        stack: z.string().max(8000).optional(),
+        appVersion: z.string().max(40).optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужно сообщение" } });
+    }
+    db.prepare(
+      "INSERT INTO crash_reports (id, child_id, device_id, message, stack, app_version) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      `crash_${crypto.randomUUID()}`,
+      device.child_id,
+      device.id,
+      body.data.message,
+      body.data.stack ?? null,
+      body.data.appVersion ?? null,
+    );
+    return { ok: true };
   });
 
   app.get("/api/device/policy", { preHandler: deviceGuard }, async (request) => {

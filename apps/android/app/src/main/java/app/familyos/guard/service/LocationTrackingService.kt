@@ -41,14 +41,18 @@ class LocationTrackingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        store = GuardStore(this)
-        createChannel()
-        startForeground(2001, notification())
-        startUpdates()
+        runCatching {
+            store = GuardStore(this)
+            createChannel()
+            startForeground(2001, notification())
+            startUpdates()
+        }.onFailure {
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startUpdates()
+        runCatching { startUpdates() }
         return START_STICKY
     }
 

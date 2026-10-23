@@ -64,6 +64,7 @@ import app.familyos.guard.admin.GuardDeviceAdmin
 import app.familyos.guard.api.ApiClient
 import app.familyos.guard.data.GuardStore
 import app.familyos.guard.data.OfflineStore
+import androidx.lifecycle.Lifecycle
 import android.content.ClipData
 import android.content.ClipboardManager
 import app.familyos.guard.data.Policy
@@ -315,6 +316,7 @@ class MainActivity : ComponentActivity() {
             runCatching { api.profile() }.onSuccess { profile = it }
             runCatching { api.calendar(YearMonth.now().toString()) }.onSuccess { calendar = it }
             flushOutbox(api)
+            reportPendingCrash()
             busy = false
             startTracking()
         }
@@ -524,8 +526,22 @@ class MainActivity : ComponentActivity() {
         ) {
             return
         }
-        runCatching {
-            ContextCompat.startForegroundService(this, Intent(this, LocationTrackingService::class.java))
+        // Запуск из фона на Android 12+ запрещён — не роняем приложение.
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            runCatching {
+                ContextCompat.startForegroundService(this, Intent(this, LocationTrackingService::class.java))
+            }
+        }
+    }
+
+    private fun reportPendingCrash() {
+        val report = CrashReporter.pending(this) ?: return
+        lifecycleScope.launch {
+            val lines = report.lineSequence().take(3).joinToString(" | ")
+            val ok = runCatching {
+                ApiClient(store).reportCrash(lines.take(480), report)
+            }.isSuccess
+            if (ok) CrashReporter.clear(this@MainActivity)
         }
     }
 

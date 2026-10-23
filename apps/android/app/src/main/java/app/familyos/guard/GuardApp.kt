@@ -13,7 +13,8 @@ import java.util.concurrent.TimeUnit
 class GuardApp : Application() {
     override fun onCreate() {
         super.onCreate()
-        scheduleSync(this)
+        CrashReporter.install(this)
+        runCatching { scheduleSync(this) }
     }
 
     companion object {
