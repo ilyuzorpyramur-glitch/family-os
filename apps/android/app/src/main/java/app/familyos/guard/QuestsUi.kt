@@ -18,6 +18,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -241,8 +245,8 @@ fun ShopScreen(
         }
 
         Text("Предложить свой товар", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-        var title by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
-        var description by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+        var title by remember { mutableStateOf("") }
+        var description by remember { mutableStateOf("") }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.padding(14.dp)) {
                 androidx.compose.material3.OutlinedTextField(
