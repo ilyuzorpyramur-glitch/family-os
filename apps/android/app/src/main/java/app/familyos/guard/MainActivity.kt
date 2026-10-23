@@ -226,6 +226,9 @@ class MainActivity : ComponentActivity() {
                                         onPickAvatar = { avatarPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
                                         onSave = { nickname, school, grade -> saveProfile(nickname, school, grade) },
                                         onRefresh = { refresh() },
+                                        onOpenParent = {
+                                            startActivity(Intent(this@MainActivity, ParentActivity::class.java))
+                                        },
                                     )
                                 }
                                 levelUpLevel?.let { level ->

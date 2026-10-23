@@ -265,6 +265,7 @@ fun ProfileScreen(
     onPickAvatar: () -> Unit,
     onSave: (nickname: String, school: String, grade: String) -> Unit,
     onRefresh: () -> Unit,
+    onOpenParent: () -> Unit,
 ) {
     var nickname by remember { mutableStateOf("") }
     var school by remember { mutableStateOf("") }
@@ -331,6 +332,7 @@ fun ProfileScreen(
         }
 
         TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить профиль") }
+        TextButton(onClick = onOpenParent) { Text("Родительский вход") }
     }
 }
 
