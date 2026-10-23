@@ -502,7 +502,7 @@ export function listProposals(db: DB, opts: { status?: string; childId?: string 
     params.push(opts.status);
   }
   if (opts.childId) {
-    where.push("(child_id = ? OR shared = 1)");
+    where.push("child_id = ?");
     params.push(opts.childId);
   }
   return db
