@@ -428,7 +428,9 @@ export function guardPage(
               ? (child.geofences ?? [])
                   .map(
                     (g) => `<div class="li">
-                      <span>${escapeHtml(g.label)}<div class="sub">${g.lat.toFixed(5)}, ${g.lng.toFixed(5)} · ${g.radius_m} м</div></span>
+                      <span>${escapeHtml(g.label)}<div class="sub">${g.lat.toFixed(5)}, ${g.lng.toFixed(5)} · ${g.radius_m} м${
+                        g.fine_coins > 0 ? ` · штраф ${g.fine_coins} монет каждые ${g.fine_every_min} мин` : ""
+                      }</div></span>
                       <form class="inline" method="post" action="/app/guard/geofences/${escapeHtml(g.id)}/delete">
                         <button class="ghost" type="submit">Удалить</button>
                       </form>
@@ -441,6 +443,10 @@ export function guardPage(
               <div class="field"><label>Широта</label><input name="lat" placeholder="52.2297" required></div>
               <div class="field"><label>Долгота</label><input name="lng" placeholder="21.0122" required></div>
               <div class="field"><label>Радиус, м</label><input name="radiusM" value="150" min="30" max="5000"></div>
+              <div class="field"><label>Штраф, монет</label><input name="fineCoins" value="0" min="0" max="1000"></div>
+              <div class="field"><label>Штраф каждые, мин</label><input name="fineEveryMin" value="5" min="1" max="120"></div>
+              <div class="field"><label>С</label><input name="scheduleStart" placeholder="08:00"></div>
+              <div class="field"><label>До</label><input name="scheduleEnd" placeholder="14:00"></div>
               <button type="submit">Добавить</button>
             </form>
           </section>`;

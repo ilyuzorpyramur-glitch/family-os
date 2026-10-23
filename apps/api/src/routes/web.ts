@@ -314,6 +314,10 @@ export function registerWeb(app: FastifyInstance, ctx: Ctx): void {
       lat,
       lng,
       radiusM: Number.isFinite(radius) ? radius : 150,
+      fineCoins: Number.isFinite(Number(body.fineCoins)) ? Number(body.fineCoins) : 0,
+      fineEveryMin: Number.isFinite(Number(body.fineEveryMin)) ? Number(body.fineEveryMin) : 5,
+      scheduleStart: body.scheduleStart?.trim() || null,
+      scheduleEnd: body.scheduleEnd?.trim() || null,
     });
     return reply.redirect("/app/guard?flash=geofence_added");
   });

@@ -6,6 +6,8 @@ import app.familyos.guard.data.QuestData
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.data.ProposalItem
 import app.familyos.guard.data.GeofenceDto
+import app.familyos.guard.data.HomeData
+import app.familyos.guard.data.ProfileData
 import app.familyos.guard.data.UsageCollector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -78,6 +80,35 @@ class ApiClient(private val store: GuardStore) {
 
     suspend fun buyItem(itemId: String) = withContext(Dispatchers.IO) {
         call("POST", "/api/device/shop/$itemId/buy", JSONObject())
+        Unit
+    }
+
+    suspend fun home(): HomeData = withContext(Dispatchers.IO) {
+        HomeData.fromJson(call("GET", "/api/device/home", null))
+    }
+
+    suspend fun profile(): ProfileData = withContext(Dispatchers.IO) {
+        ProfileData.fromJson(call("GET", "/api/device/profile", null))
+    }
+
+    suspend fun uploadAvatar(imageBase64: String): String = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("imageBase64", imageBase64)
+        call("POST", "/api/device/profile/avatar", body).getJSONObject("data").optString("avatarUrl")
+    }
+
+    suspend fun updateProfile(nickname: String?, school: String?, grade: String?) = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+        if (nickname != null) body.put("nickname", nickname)
+        if (school != null) body.put("school", school)
+        if (grade != null) body.put("grade", grade)
+        call("PATCH", "/api/device/profile", body)
+        Unit
+    }
+
+    suspend fun sendLocation(lat: Double, lng: Double, accuracy: Float?) = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("lat", lat).put("lng", lng)
+        if (accuracy != null) body.put("accuracy", accuracy.toDouble())
+        call("POST", "/api/device/location", body)
         Unit
     }
 

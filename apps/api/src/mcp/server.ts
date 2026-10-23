@@ -239,6 +239,11 @@ const TOOLS = [
         lat: { type: "number" },
         lng: { type: "number" },
         radiusM: { type: "integer", minimum: 30, maximum: 5000 },
+        fineCoins: { type: "integer", minimum: 0, maximum: 1000 },
+        fineEveryMin: { type: "integer", minimum: 1, maximum: 120 },
+        scheduleStart: { type: "string" },
+        scheduleEnd: { type: "string" },
+        autoQuestId: { type: "string" },
       },
       required: ["childId", "label", "lat", "lng"],
       additionalProperties: false,
@@ -617,6 +622,11 @@ export function registerMcp(app: FastifyInstance, ctx: Ctx): void {
             lat: z.number().min(-90).max(90),
             lng: z.number().min(-180).max(180),
             radiusM: z.number().int().min(30).max(5000).optional(),
+            fineCoins: z.number().int().min(0).max(1000).optional(),
+            fineEveryMin: z.number().int().min(1).max(120).optional(),
+            scheduleStart: z.string().optional(),
+            scheduleEnd: z.string().optional(),
+            autoQuestId: z.string().optional(),
           })
           .safeParse(args);
         if (!body.success) throw new Error(body.error.issues[0]?.message ?? "Некорректные аргументы");

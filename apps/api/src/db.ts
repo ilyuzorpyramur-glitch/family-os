@@ -276,6 +276,26 @@ CREATE TABLE IF NOT EXISTS shop_proposals (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS geofence_state (
+  child_id     TEXT NOT NULL,
+  geofence_id  TEXT NOT NULL,
+  inside       INTEGER NOT NULL DEFAULT 0,
+  last_fine_at TEXT,
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (child_id, geofence_id)
+);
+
+CREATE TABLE IF NOT EXISTS location_pings (
+  id         TEXT PRIMARY KEY,
+  child_id   TEXT NOT NULL,
+  lat        REAL NOT NULL,
+  lng        REAL NOT NULL,
+  accuracy   REAL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pings_child ON location_pings(child_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS geofences (
   id           TEXT PRIMARY KEY,
   child_id     TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
@@ -298,6 +318,18 @@ export function openDb(file: string): DB {
   addColumn(db, "quests", "photos_required", "photos_required INTEGER NOT NULL DEFAULT 0");
   addColumn(db, "shop_items", "photo_path", "photo_path TEXT");
   addColumn(db, "extension_requests", "cost_coins", "cost_coins INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "children", "avatar_path", "avatar_path TEXT");
+  addColumn(db, "children", "nickname", "nickname TEXT");
+  addColumn(db, "children", "school", "school TEXT");
+  addColumn(db, "children", "grade", "grade TEXT");
+  addColumn(db, "geofences", "fine_coins", "fine_coins INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "geofences", "schedule_start", "schedule_start TEXT");
+  addColumn(db, "geofences", "schedule_end", "schedule_end TEXT");
+  addColumn(db, "geofences", "fine_every_min", "fine_every_min INTEGER NOT NULL DEFAULT 5");
+  addColumn(db, "geofences", "auto_quest_id", "auto_quest_id TEXT");
+  addColumn(db, "devices", "last_lat", "last_lat REAL");
+  addColumn(db, "devices", "last_lng", "last_lng REAL");
+  addColumn(db, "devices", "last_location_at", "last_location_at TEXT");
   return db;
 }
 

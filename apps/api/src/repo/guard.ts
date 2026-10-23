@@ -313,6 +313,11 @@ export type GeofenceRow = {
   radius_m: number;
   notify_enter: number;
   notify_exit: number;
+  fine_coins: number;
+  schedule_start: string | null;
+  schedule_end: string | null;
+  fine_every_min: number;
+  auto_quest_id: string | null;
 };
 
 export function listGeofences(db: DB, childId?: string): GeofenceRow[] {
@@ -324,12 +329,26 @@ export function listGeofences(db: DB, childId?: string): GeofenceRow[] {
 
 export function createGeofence(
   db: DB,
-  input: { childId: string; label: string; lat: number; lng: number; radiusM?: number; notifyEnter?: boolean; notifyExit?: boolean },
+  input: {
+    childId: string;
+    label: string;
+    lat: number;
+    lng: number;
+    radiusM?: number;
+    notifyEnter?: boolean;
+    notifyExit?: boolean;
+    fineCoins?: number;
+    scheduleStart?: string | null;
+    scheduleEnd?: string | null;
+    fineEveryMin?: number;
+    autoQuestId?: string | null;
+  },
 ): GeofenceRow {
   const id = `geo_${crypto.randomUUID()}`;
   db.prepare(
-    `INSERT INTO geofences (id, child_id, label, lat, lng, radius_m, notify_enter, notify_exit)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO geofences (id, child_id, label, lat, lng, radius_m, notify_enter, notify_exit,
+       fine_coins, schedule_start, schedule_end, fine_every_min, auto_quest_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.childId,
@@ -339,12 +358,51 @@ export function createGeofence(
     Math.max(30, Math.min(5000, Math.round(input.radiusM ?? 150))),
     input.notifyEnter === false ? 0 : 1,
     input.notifyExit === false ? 0 : 1,
+    Math.max(0, Math.min(1000, Math.round(input.fineCoins ?? 0))),
+    input.scheduleStart ?? null,
+    input.scheduleEnd ?? null,
+    Math.max(1, Math.min(120, Math.round(input.fineEveryMin ?? 5))),
+    input.autoQuestId ?? null,
   );
   return db.prepare("SELECT * FROM geofences WHERE id = ?").get(id) as GeofenceRow;
 }
 
 export function deleteGeofence(db: DB, id: string): boolean {
   return db.prepare("DELETE FROM geofences WHERE id = ?").run(id).changes > 0;
+}
+
+export type ChildProfileRow = {
+  id: string;
+  name: string;
+  birth_date: string | null;
+  avatar_path: string | null;
+  nickname: string | null;
+  school: string | null;
+  grade: string | null;
+};
+
+export function getChildProfile(db: DB, childId: string): ChildProfileRow | undefined {
+  return db.prepare("SELECT * FROM children WHERE id = ?").get(childId) as ChildProfileRow | undefined;
+}
+
+export function updateChildProfile(
+  db: DB,
+  childId: string,
+  patch: { nickname?: string | null; school?: string | null; grade?: string | null },
+): ChildProfileRow | undefined {
+  const current = getChildProfile(db, childId);
+  if (!current) return undefined;
+  db.prepare("UPDATE children SET nickname = ?, school = ?, grade = ? WHERE id = ?").run(
+    patch.nickname ?? current.nickname,
+    patch.school ?? current.school,
+    patch.grade ?? current.grade,
+    childId,
+  );
+  return getChildProfile(db, childId);
+}
+
+export function setChildAvatar(db: DB, childId: string, path: string): void {
+  db.prepare("UPDATE children SET avatar_path = ? WHERE id = ?").run(path, childId);
 }
 
 export type GuardOverview = {

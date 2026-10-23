@@ -62,10 +62,13 @@ import app.familyos.guard.admin.GuardDeviceAdmin
 import app.familyos.guard.api.ApiClient
 import app.familyos.guard.data.GuardStore
 import app.familyos.guard.data.Policy
+import app.familyos.guard.data.HomeData
+import app.familyos.guard.data.ProfileData
 import app.familyos.guard.data.QuestData
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.service.AppBlockService
 import app.familyos.guard.work.GuardNotifications
+import app.familyos.guard.service.LocationTrackingService
 import kotlinx.coroutines.launch
 
 private data class UiState(
@@ -87,14 +90,24 @@ class MainActivity : ComponentActivity() {
     private var tab by mutableStateOf(0)
     private var quests by mutableStateOf<QuestData?>(null)
     private var shop by mutableStateOf<ShopData?>(null)
+    private var home by mutableStateOf<HomeData?>(null)
+    private var profile by mutableStateOf<ProfileData?>(null)
     private var pendingQuestId by mutableStateOf<String?>(null)
     private var proposalPhoto by mutableStateOf<String?>(null)
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    private val locationPermission =
+    private val backgroundLocationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private val locationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                backgroundLocationPermission.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                startTracking()
+            }
+        }
 
     private val questPhotoPicker =
         registerForActivityResult(PickMultipleVisualMedia(3)) { uris ->
@@ -108,6 +121,11 @@ class MainActivity : ComponentActivity() {
                 proposalPhoto = ImageUtils.toBase64(this, uri)
                 message = if (proposalPhoto != null) "Фото добавлено" else "Не удалось прочитать фото"
             }
+        }
+
+    private val avatarPicker =
+        registerForActivityResult(PickVisualMedia()) { uri ->
+            if (uri != null) uploadAvatar(uri)
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,7 +167,31 @@ class MainActivity : ComponentActivity() {
                         Column(Modifier.fillMaxSize().statusBarsPadding()) {
                             Box(Modifier.weight(1f)) {
                                 when (tab) {
-                                    0 -> Dashboard(
+                                    0 -> HomeScreen(
+                                        home = home,
+                                        busy = busy,
+                                        message = message,
+                                        onRefresh = { refresh() },
+                                        onOpenProfile = { tab = 4 },
+                                    )
+                                    1 -> QuestsScreen(
+                                        quests = quests,
+                                        busy = busy,
+                                        message = message,
+                                        onComplete = { id, photos -> startQuest(id, photos) },
+                                        onRefresh = { refresh() },
+                                    )
+                                    2 -> ShopScreen(
+                                        shop = shop,
+                                        busy = busy,
+                                        message = message,
+                                        proposalPhoto = proposalPhoto,
+                                        onBuy = { buyItem(it) },
+                                        onRefresh = { refresh() },
+                                        onPickPhoto = { startProposalPhoto() },
+                                        onPropose = { title, description -> proposeItem(title, description) },
+                                    )
+                                    3 -> Dashboard(
                                         state = state,
                                         busy = busy,
                                         message = message,
@@ -160,22 +202,13 @@ class MainActivity : ComponentActivity() {
                                         onAdmin = { requestAdmin() },
                                         onReset = { reset() },
                                     )
-                                    1 -> QuestsScreen(
-                                        quests = quests,
+                                    else -> ProfileScreen(
+                                        profile = profile,
                                         busy = busy,
                                         message = message,
-                                        onComplete = { id, photos -> startQuest(id, photos) },
+                                        onPickAvatar = { avatarPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
+                                        onSave = { nickname, school, grade -> saveProfile(nickname, school, grade) },
                                         onRefresh = { refresh() },
-                                    )
-                                    else -> ShopScreen(
-                                        shop = shop,
-                                        busy = busy,
-                                        message = message,
-                                        proposalPhoto = proposalPhoto,
-                                        onBuy = { buyItem(it) },
-                                        onRefresh = { refresh() },
-                                        onPickPhoto = { startProposalPhoto() },
-                                        onPropose = { title, description -> proposeItem(title, description) },
                                     )
                                 }
                             }
@@ -186,9 +219,11 @@ class MainActivity : ComponentActivity() {
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                             ) {
-                                TabButton("Щит", tab == 0) { tab = 0 }
+                                TabButton("Главная", tab == 0) { tab = 0 }
                                 TabButton("Задания", tab == 1) { tab = 1 }
                                 TabButton("Магазин", tab == 2) { tab = 2 }
+                                TabButton("Щит", tab == 3) { tab = 3 }
+                                TabButton("Профиль", tab == 4) { tab = 4 }
                             }
                         }
                     } else {
@@ -245,7 +280,10 @@ class MainActivity : ComponentActivity() {
                 .onFailure { message = it.message }
             runCatching { api.quests() }.onSuccess { quests = it }
             runCatching { api.shop() }.onSuccess { shop = it }
+            runCatching { api.home() }.onSuccess { home = it }
+            runCatching { api.profile() }.onSuccess { profile = it }
             busy = false
+            startTracking()
         }
     }
 
@@ -343,6 +381,57 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun uploadAvatar(uri: Uri) {
+        lifecycleScope.launch {
+            busy = true
+            val encoded = ImageUtils.toBase64(this@MainActivity, uri, maxDim = 800)
+            if (encoded == null) {
+                message = "Не удалось прочитать фото"
+                busy = false
+                return@launch
+            }
+            val api = ApiClient(store)
+            runCatching {
+                api.uploadAvatar(encoded)
+                profile = api.profile()
+                home = api.home()
+            }.onSuccess {
+                message = "Фото профиля обновлено"
+            }.onFailure {
+                message = it.message
+            }
+            busy = false
+        }
+    }
+
+    private fun saveProfile(nickname: String, school: String, grade: String) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                api.updateProfile(nickname.ifBlank { null }, school.ifBlank { null }, grade.ifBlank { null })
+                profile = api.profile()
+                home = api.home()
+            }.onSuccess {
+                message = "Профиль сохранён"
+            }.onFailure {
+                message = it.message
+            }
+            busy = false
+        }
+    }
+
+    private fun startTracking() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        runCatching {
+            ContextCompat.startForegroundService(this, Intent(this, LocationTrackingService::class.java))
+        }
+    }
+
     private fun openUsageSettings() {
         runCatching { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
             .onFailure { Toast.makeText(this, "Не удалось открыть настройки", Toast.LENGTH_SHORT).show() }
@@ -387,7 +476,11 @@ class MainActivity : ComponentActivity() {
         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         if (dpm.isDeviceOwnerApp(packageName)) {
             runCatching {
-                dpm.setUninstallBlocked(ComponentName(this, GuardDeviceAdmin::class.java), packageName, true)
+                val admin = ComponentName(this, GuardDeviceAdmin::class.java)
+                dpm.setUninstallBlocked(admin, packageName, true)
+                dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_SAFE_BOOT)
+                dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_FACTORY_RESET)
+                dpm.addUserRestriction(admin, android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES)
             }
         }
     }

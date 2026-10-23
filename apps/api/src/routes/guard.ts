@@ -4,6 +4,8 @@ import { bearerActor, isAdminCookie } from "../auth.js";
 import type { Ctx } from "./api.js";
 import { localDateISO } from "../lib/time.js";
 import { ensureProfile, profileView, refreshRecurring } from "../repo/quest.js";
+import { homeData, processLocation } from "../repo/geo.js";
+import { imageUrl, saveImage } from "../uploads.js";
 import {
   addEvent,
   currentBlockReason,
@@ -11,7 +13,10 @@ import {
   createDevice,
   createGeofence,
   deleteGeofence,
+  getChildProfile,
   listGeofences,
+  setChildAvatar,
+  updateChildProfile,
   createExtensionRequest,
   decideExtensionRequest,
   effectiveLimit,
@@ -142,10 +147,24 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
         radiusM: z.number().int().min(30).max(5000).optional(),
         notifyEnter: z.boolean().optional(),
         notifyExit: z.boolean().optional(),
+        fineCoins: z.number().int().min(0).max(1000).optional(),
+        scheduleStart: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+        scheduleEnd: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+        fineEveryMin: z.number().int().min(1).max(120).optional(),
+        autoQuestId: z.string().nullable().optional(),
       })
       .safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    if (body.data.autoQuestId) {
+      const quest = db.prepare("SELECT child_id FROM quests WHERE id = ?").get(body.data.autoQuestId) as
+        | { child_id: string }
+        | undefined;
+      if (!quest || quest.child_id !== id) {
+        return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Задание для автовыполнения не найдено" } });
+      }
+      db.prepare("UPDATE quests SET approval = 'agent' WHERE id = ?").run(body.data.autoQuestId);
     }
     return { ok: true, data: createGeofence(db, { childId: id, ...body.data }) };
   });
@@ -164,6 +183,83 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
     }
     (request as FastifyRequest & { device?: typeof device }).device = device;
   };
+
+  app.post("/api/device/location", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const body = z
+      .object({
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+        accuracy: z.number().min(0).optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужны координаты" } });
+    }
+    const result = processLocation(db, device.child_id, device.id, body.data.lat, body.data.lng, body.data.accuracy);
+    touchDevice(db, device.id);
+    return { ok: true, data: result };
+  });
+
+  app.get("/api/device/home", { preHandler: deviceGuard }, async (request) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    refreshRecurring(db, device.child_id);
+    return { ok: true, data: homeData(db, device.child_id, config.publicUrl) };
+  });
+
+  app.get("/api/device/profile", { preHandler: deviceGuard }, async (request) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const child = getChildProfile(db, device.child_id);
+    return {
+      ok: true,
+      data: {
+        child: child
+          ? {
+              id: child.id,
+              name: child.name,
+              nickname: child.nickname,
+              school: child.school,
+              grade: child.grade,
+              birthDate: child.birth_date,
+              avatarUrl: imageUrl(config.publicUrl, child.avatar_path),
+            }
+          : null,
+        profile: profileView(db, device.child_id),
+        extension: { minutes: 30, costCoins: 50 },
+      },
+    };
+  });
+
+  app.patch("/api/device/profile", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const body = z
+      .object({
+        nickname: z.string().max(40).nullable().optional(),
+        school: z.string().max(120).nullable().optional(),
+        grade: z.string().max(40).nullable().optional(),
+      })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
+    }
+    const child = updateChildProfile(db, device.child_id, body.data);
+    return { ok: true, data: child };
+  });
+
+  app.post("/api/device/profile/avatar", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const body = z.object({ imageBase64: z.string().min(10) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужно изображение" } });
+    }
+    try {
+      const path = saveImage(config.dataDir, body.data.imageBase64);
+      setChildAvatar(db, device.child_id, path);
+      return { ok: true, data: { avatarUrl: imageUrl(config.publicUrl, path) } };
+    } catch (error) {
+      return reply.code(400).send({ ok: false, error: { code: "UPLOAD_FAILED", message: (error as Error).message } });
+    }
+  });
 
   app.get("/api/device/policy", { preHandler: deviceGuard }, async (request) => {
     const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
