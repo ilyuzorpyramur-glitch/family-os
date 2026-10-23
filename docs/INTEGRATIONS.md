@@ -87,6 +87,12 @@
 | `guard_status` | `guard:read` | лимиты и события ребёнка |
 | `guard_set_limit` | `guard:write` + confirm | изменить лимит |
 | `notify_send` | `notify:write` | отправить уведомление члену семьи |
+| `quest_list` | `quest:read` | задания и прогресс ребёнка |
+| `quest_create` | `quest:write` | создать задание с режимом подтверждения |
+| `quest_approve` | `quest:write` | одобрить/отклонить выполненное задание |
+| `shop_proposals` | `shop:read` | предложения товаров от детей |
+| `shop_set_price` | `shop:write` | оценить товар и опубликовать |
+| `purchase_decide` | `shop:write` | одобрить/отклонить покупку |
 
 - Скиллы OpenClaw: «семейный дайджест», «разбор трат», «план питания на неделю»,
   «проверка запасов», «конфликт экранного времени».
