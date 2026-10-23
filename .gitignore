@@ -1,0 +1,42 @@
+# Node
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+coverage/
+
+# Android
+.gradle/
+local.properties
+*.iml
+*.apk
+*.aab
+*.jks
+*.keystore
+captures/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pem
+
+# Data
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
