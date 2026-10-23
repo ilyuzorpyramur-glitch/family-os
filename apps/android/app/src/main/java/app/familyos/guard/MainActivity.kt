@@ -128,13 +128,13 @@ class MainActivity : ComponentActivity() {
         if (::store.isInitialized) refresh()
     }
 
-    private fun saveConfig(url: String, token: ***) {
-        if (url.isBlank() || token.isBlank()) {
+    private fun saveConfig(url: String, key: String) {
+        if (url.isBlank() || key.isBlank()) {
             message = "Заполните адрес сервера и токен"
             return
         }
         store.serverUrl = url
-        store.token = ***
+        store.token = key
         message = null
         refresh()
     }

@@ -29,7 +29,7 @@ secrets/
 *.db
 *.sqlite
 *.sqlite3
-data/
+/data/
 
 # IDE / OS
 .idea/
