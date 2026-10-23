@@ -153,7 +153,10 @@ export function registerBankApi(app: FastifyInstance, ctx: Ctx): void {
     let skipped = 0;
     const lines = body.data.csv.split(/\r?\n/).filter((line) => line.trim().length > 0);
     for (const line of lines) {
-      const parts = line.split(/[;,\t]/).map((part) => part.trim());
+      // Разделитель: ; или таб. Одиночная запятая может быть десятичным разделителем.
+      const parts = (line.includes(";") || line.includes("\t") ? line.split(/[;\t]/) : line.split(",")).map((part) =>
+        part.trim(),
+      );
       if (parts.length < 2) {
         skipped += 1;
         continue;
