@@ -285,7 +285,6 @@ fun ParentApp(
 }
 
 @Composable
-@Composable
 private fun BigMetric(value: String, label: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,

@@ -170,8 +170,6 @@ private fun DayCell(
             }
         }
     }
-        }
-    }
 }
 
 @Composable
