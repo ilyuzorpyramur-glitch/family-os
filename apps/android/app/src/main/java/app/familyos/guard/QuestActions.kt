@@ -45,6 +45,7 @@ fun ShoppingQuestDialog(
     onDismiss: () -> Unit,
 ) {
     var barcode by remember { mutableStateOf("") }
+    var scanning by remember { mutableStateOf(false) }
     var total by remember { mutableStateOf(0) }
     var done by remember { mutableStateOf(0) }
     var items by remember { mutableStateOf<List<Pair<String, Boolean>>>(emptyList()) }
@@ -78,17 +79,18 @@ fun ShoppingQuestDialog(
                 )
                 Text("$done из $total", color = QMuted, fontSize = 11.sp)
 
-                OutlinedTextField(
-                    value = barcode,
-                    onValueChange = { barcode = it },
-                    label = { Text("Штрихкод") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 Button(
-                    onClick = {
-                        val code = barcode.trim()
-                        if (code.isNotEmpty()) {
+                    onClick = { scanning = true },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("📷 Сканировать покупку") }
+
+                if (scanning) {
+                    app.familyos.guard.scan.CodeScannerDialog(
+                        title = "Сканировать",
+                        hint = "Наведите камеру на штрихкод товара из списка",
+                        onResult = { code ->
+                            scanning = false
                             status = null
                             kotlinx.coroutines.MainScope().launch {
                                 val result = runCatching { onScan(questId, code) }
@@ -102,11 +104,10 @@ fun ShoppingQuestDialog(
                                 barcode = ""
                                 reload()
                             }
-                        }
-                    },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Отметить") }
+                        },
+                        onDismiss = { scanning = false },
+                    )
+                }
 
                 status?.let { Text(it, color = QAccent, fontSize = 11.sp) }
 

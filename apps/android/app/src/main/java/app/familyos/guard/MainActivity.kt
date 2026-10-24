@@ -78,6 +78,8 @@ import app.familyos.guard.data.QuestItem
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.service.AppBlockService
 import app.familyos.guard.work.GuardNotifications
+import app.familyos.guard.api.PairClient
+import app.familyos.guard.scan.CodeScannerDialog
 import app.familyos.guard.service.DnsVpnService
 import app.familyos.guard.service.LocationTrackingService
 import android.net.VpnService
@@ -110,11 +112,13 @@ class MainActivity : ComponentActivity() {
     private var scanQuest by mutableStateOf<QuestItem?>(null)
     private var cookQuest by mutableStateOf<QuestItem?>(null)
     private var session by mutableStateOf<org.json.JSONObject?>(null)
+    private var nutrition by mutableStateOf<app.familyos.guard.data.Nutrition?>(null)
     private var recipes by mutableStateOf<List<Recipe>>(emptyList())
     private var products by mutableStateOf<List<Product>>(emptyList())
     private var levelUpLevel by mutableStateOf<Int?>(null)
     private var lastLevel by mutableStateOf<Int?>(null)
     private var pendingQuestId by mutableStateOf<String?>(null)
+    private var showPermissions by mutableStateOf(false)
     private var proposalPhoto by mutableStateOf<String?>(null)
 
     private val notificationPermission =
@@ -211,6 +215,26 @@ class MainActivity : ComponentActivity() {
                                         onRefresh = { refresh() },
                                         onOpenProfile = { tab = 4 },
                                         calendar = calendar,
+                                        onAddMeal = { title, kcal ->
+                                            lifecycleScope.launch {
+                                                runCatching { ApiClient(store).addMeal(title, kcal) }
+                                                    .onSuccess { root ->
+                                                        nutrition = app.familyos.guard.data.Nutrition.fromJson(
+                                                            root.optJSONObject("data")?.optJSONObject("day"),
+                                                        )
+                                                    }
+                                                    .onFailure { message = it.message }
+                                            }
+                                        },
+                                        onDeleteMeal = { id ->
+                                            lifecycleScope.launch {
+                                                runCatching { ApiClient(store).deleteMeal(id) }
+                                                    .onSuccess { root ->
+                                                        nutrition = app.familyos.guard.data.Nutrition.fromJson(root.optJSONObject("data"))
+                                                    }
+                                                    .onFailure { message = it.message }
+                                            }
+                                        },
                                         onAddEvent = { title, description, geofenceId, date, start, minutes, lat, lng ->
                                             addEvent(title, description, geofenceId, date, start, minutes, lat, lng)
                                         },
@@ -245,6 +269,7 @@ class MainActivity : ComponentActivity() {
                                         onAccessibilitySettings = { openAccessibilitySettings() },
                                         onAdmin = { requestAdmin() },
                                         onSiteFilter = { requestSiteFilter() },
+                                        onAllPermissions = { showPermissions = true },
                                         vpnEnabled = store.vpnWanted,
                                         onReset = { reset() },
                                     )
@@ -255,11 +280,22 @@ class MainActivity : ComponentActivity() {
                                         onPickAvatar = { avatarPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
                                         onSave = { nickname, school, grade -> saveProfile(nickname, school, grade) },
                                         onRefresh = { refresh() },
-                                        onOpenParent = {
-                                            startActivity(Intent(this@MainActivity, ParentActivity::class.java))
-                                        },
                                     )
                                 }
+                                if (showPermissions) {
+                                    androidx.compose.material3.Surface(
+                                        Modifier.fillMaxSize(),
+                                        color = MaterialTheme.colorScheme.background,
+                                    ) {
+                                        AllPermissionsScreen(
+                                            deviceOwner = state.deviceOwner,
+                                            usageAccess = state.usageAccess,
+                                            accessibility = state.accessibility,
+                                            onBack = { showPermissions = false },
+                                            onChanged = { refresh(force = true) },
+                                        )
+                                    }
+                                } else {
                                 scanQuest?.let { quest ->
                                     ShoppingQuestDialog(
                                         questId = quest.id,
@@ -301,6 +337,7 @@ class MainActivity : ComponentActivity() {
                                         onDismiss = { levelUpLevel = null },
                                     )
                                 }
+                                }
                             }
                             BottomBar(tab) { tab = it }
                         }
@@ -309,7 +346,7 @@ class MainActivity : ComponentActivity() {
                             initialUrl = state.serverUrl,
                             message = message,
                             onSave = { url, token -> saveConfig(url, token) },
-                            onParent = { startActivity(Intent(this@MainActivity, ParentActivity::class.java)) },
+                            onPair = { url, code -> claimPair(url, code) },
                         )
                     }
                 }
@@ -332,6 +369,32 @@ class MainActivity : ComponentActivity() {
         store.configure(url, key)
         message = null
         refresh()
+    }
+
+    /** Обмен QR-кода на токен устройства: адрес сервера и токен приходят из ответа. */
+    private fun claimPair(url: String, code: String) {
+        if (code.length < 6) {
+            message = "Код в QR слишком короткий — попросите новый"
+            return
+        }
+        lifecycleScope.launch {
+            busy = true
+            message = null
+            val target = url.ifBlank { store.serverUrl.ifBlank { BuildConfig.SERVER_HINT } }
+            runCatching {
+                val claimed = PairClient.claim(target, code, android.os.Build.MODEL)
+                if (claimed.role != "child") error("Этот QR для родительского приложения")
+                store.configure(claimed.serverUrl.ifBlank { target }, claimed.token)
+                claimed
+            }.onSuccess { claimed ->
+                message = "Подключено: ${claimed.childName ?: "устройство"}"
+                busy = false
+                refresh()
+            }.onFailure {
+                message = it.message ?: "Не удалось подключиться"
+                busy = false
+            }
+        }
     }
 
     private fun reset() {
@@ -428,6 +491,7 @@ class MainActivity : ComponentActivity() {
             runCatching { products = Product.listFrom(org.json.JSONObject().put("data", array)) }
         }
         data.optJSONObject("sites")?.let { store.vpnRules = it.toString() }
+        data.optJSONObject("nutrition")?.let { nutrition = app.familyos.guard.data.Nutrition.fromJson(it) }
     }
 
     private fun askForTime() {
@@ -790,10 +854,24 @@ private fun Setup(
     initialUrl: String,
     message: String?,
     onSave: (String, String) -> Unit,
-    onParent: () -> Unit,
+    onPair: (String, String) -> Unit,
 ) {
     var url by remember { mutableStateOf(initialUrl) }
     var token by remember { mutableStateOf("") }
+    var scanning by remember { mutableStateOf(false) }
+    if (scanning) {
+        CodeScannerDialog(
+            title = "QR от родителя",
+            hint = "Родитель открывает «Подключить ребёнка» и показывает этот код",
+            qrOnly = true,
+            onResult = { raw ->
+                scanning = false
+                val parsed = app.familyos.guard.api.PairPayload.parse(raw)
+                onPair(parsed.url ?: url, parsed.code)
+            },
+            onDismiss = { scanning = false },
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -805,10 +883,17 @@ private fun Setup(
         Text("Family OS Guard", fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Введите адрес сервера и токен устройства. Токен выдаёт родитель в панели Guard.",
+            "Самый быстрый способ — отсканировать QR из родительского приложения. " +
+                "Адрес и токен можно ввести вручную, если камеры нет.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
+        Button(onClick = { scanning = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("📷 Сканировать QR родителя")
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Или вручную", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
 
         OutlinedTextField(
             value = url,
@@ -831,10 +916,6 @@ private fun Setup(
         Button(onClick = { onSave(url, token) }, modifier = Modifier.fillMaxWidth()) {
             Text("Подключить как ребёнок")
         }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onParent, modifier = Modifier.fillMaxWidth()) {
-            Text("Я родитель")
-        }
 
         message?.let {
             Spacer(Modifier.height(18.dp))
@@ -856,6 +937,7 @@ private fun Dashboard(
     onAccessibilitySettings: () -> Unit,
     onAdmin: () -> Unit,
     onSiteFilter: () -> Unit,
+    onAllPermissions: () -> Unit,
     vpnEnabled: Boolean,
     onReset: () -> Unit,
 ) {
@@ -938,6 +1020,9 @@ private fun Dashboard(
                     granted = vpnEnabled,
                     onOpen = onSiteFilter,
                 )
+                Button(onClick = onAllPermissions, modifier = Modifier.fillMaxWidth()) {
+                    Text("Все доступы")
+                }
                 if (state.usageAccess && state.accessibility && state.deviceOwner) {
                     Text("Все доступы выданы", color = Color(0xFF34D399), fontWeight = FontWeight.SemiBold)
                 }

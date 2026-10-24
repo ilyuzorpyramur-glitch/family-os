@@ -50,6 +50,7 @@ export function registerBootstrapApi(app: FastifyInstance, ctx: Ctx): void {
       ["recipes", "/api/device/recipes"],
       ["products", "/api/device/products"],
       ["sites", "/api/device/sites/blocklist"],
+      ["nutrition", "/api/device/nutrition"],
       ["calendar", `/api/device/calendar?month=${month}`],
     ]);
     return { ok: true, data: { ...data, month, fetchedAt: new Date().toISOString() } };
@@ -68,6 +69,7 @@ export function registerBootstrapApi(app: FastifyInstance, ctx: Ctx): void {
       ["recipes", "/api/recipes"],
       ["products", "/api/products"],
       ["suggest", "/api/shopping/suggest"],
+      ["nutrition", "/api/guard/nutrition"],
     ]);
     return { ok: true, data: { ...data, fetchedAt: new Date().toISOString() } };
   });

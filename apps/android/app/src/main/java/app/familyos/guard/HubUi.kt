@@ -50,11 +50,14 @@ private val Muted = Color(0xFF8B9BB0)
 @Composable
 fun HomeScreen(
     home: HomeData?,
+    nutrition: app.familyos.guard.data.Nutrition?,
     calendar: CalendarData?,
     busy: Boolean,
     message: String?,
     onRefresh: () -> Unit,
     onOpenProfile: () -> Unit,
+    onAddMeal: (String, Int) -> Unit,
+    onDeleteMeal: (String) -> Unit,
     onAddEvent: (
         title: String,
         description: String,
@@ -68,6 +71,18 @@ fun HomeScreen(
 ) {
     var selectedDate by remember { mutableStateOf(java.time.LocalDate.now().toString()) }
     var showAdd by remember { mutableStateOf(false) }
+    var showMeal by remember { mutableStateOf(false) }
+    if (showMeal) {
+        AddMealDialog(
+            nutrition = nutrition,
+            onAdd = { title, kcal ->
+                showMeal = false
+                onAddMeal(title, kcal)
+            },
+            onDelete = onDeleteMeal,
+            onDismiss = { showMeal = false },
+        )
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -265,7 +280,6 @@ fun ProfileScreen(
     onPickAvatar: () -> Unit,
     onSave: (nickname: String, school: String, grade: String) -> Unit,
     onRefresh: () -> Unit,
-    onOpenParent: () -> Unit,
 ) {
     var nickname by remember { mutableStateOf("") }
     var school by remember { mutableStateOf("") }
@@ -332,7 +346,11 @@ fun ProfileScreen(
         }
 
         TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить профиль") }
-        TextButton(onClick = onOpenParent) { Text("Родительский вход") }
+        Text(
+            "Профиль заполняет родитель. Если что-то неверно — попросите исправить.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 11.sp,
+        )
     }
 }
 
@@ -374,4 +392,56 @@ private fun minutesText(minutes: Int): String {
     val h = minutes / 60
     val m = minutes % 60
     return if (m == 0) "$h ч" else "$h ч $m м"
+}
+
+/** Добавление приёма пищи: название и калории. */
+@Composable
+fun AddMealDialog(
+    nutrition: app.familyos.guard.data.Nutrition?,
+    onAdd: (String, Int) -> Unit,
+    onDelete: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var title by remember { mutableStateOf("") }
+    var kcal by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Что поел?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    title,
+                    { title = it },
+                    label = { Text("Название, например «Суп»") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    kcal,
+                    { kcal = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Калории, ккал") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                nutrition?.meals?.take(6)?.forEach { meal ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${meal.title} · ${meal.kcal} ккал", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { onDelete(meal.id) }) { Text("убрать", fontSize = 11.sp) }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { if (title.isNotBlank() && kcal.isNotBlank()) onAdd(title.trim(), kcal.toInt()) },
+                enabled = title.isNotBlank() && kcal.isNotBlank(),
+            ) { Text("Добавить") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+    )
 }

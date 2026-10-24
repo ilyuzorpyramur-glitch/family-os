@@ -114,6 +114,22 @@ class ApiClient(private val store: GuardStore) {
         Unit
     }
 
+    suspend fun addMeal(title: String, kcal: Int): JSONObject = withContext(Dispatchers.IO) {
+        call(
+            "POST",
+            "/api/device/meals",
+            org.json.JSONObject().put("title", title).put("kcal", kcal),
+        )
+    }
+
+    suspend fun deleteMeal(id: String): JSONObject = withContext(Dispatchers.IO) {
+        call("DELETE", "/api/device/meals/$id", null)
+    }
+
+    suspend fun nutrition(): JSONObject = withContext(Dispatchers.IO) {
+        call("GET", "/api/device/nutrition", null).optJSONObject("data") ?: org.json.JSONObject()
+    }
+
     suspend fun bootstrap(): JSONObject = withContext(Dispatchers.IO) {
         call("GET", "/api/device/bootstrap", null).optJSONObject("data") ?: JSONObject()
     }

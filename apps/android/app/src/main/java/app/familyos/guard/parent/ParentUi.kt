@@ -43,7 +43,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.familyos.guard.api.PairClient
 import app.familyos.guard.api.ParentApi
+import app.familyos.guard.scan.CodeScannerDialog
+import app.familyos.guard.scan.QrImage
 import app.familyos.guard.data.ChildCard
 import app.familyos.guard.data.MoneyOverview
 import app.familyos.guard.data.PendingEvent
@@ -133,6 +136,25 @@ fun ParentApp(
                     }.onFailure {
                         error = it.message
                     }
+                    busy = false
+                }
+            },
+            onQrLogin = { code ->
+                scope.launch {
+                    busy = true
+                    error = null
+                    val target = baseUrl.ifBlank { app.familyos.guard.BuildConfig.SERVER_HINT }
+                    runCatching {
+                        val claimed = PairClient.claim(target, code, "parent")
+                        if (claimed.role != "parent") error("Этот QR для детского приложения")
+                        baseUrl = claimed.serverUrl.ifBlank { target }
+                        token = claimed.token
+                        onTokenSaved(claimed.token)
+                        ParentApi(baseUrl, token).get("/api/accounts")
+                    }.onSuccess {
+                        loggedIn = true
+                        loadAll()
+                    }.onFailure { error = it.message ?: "Не удалось войти" }
                     busy = false
                 }
             },
@@ -287,8 +309,23 @@ private fun ParentLogin(
     onUrl: (String) -> Unit,
     onToken: (String) -> Unit,
     onLogin: () -> Unit,
+    onQrLogin: (String) -> Unit,
     onExit: () -> Unit,
 ) {
+    var scanning by remember { mutableStateOf(false) }
+    if (scanning) {
+        CodeScannerDialog(
+            title = "Вход по QR",
+            hint = "Откройте панель Family OS → «Вход по QR» и отсканируйте код",
+            qrOnly = true,
+            onResult = { raw ->
+                scanning = false
+                val parsed = app.familyos.guard.api.PairPayload.parse(raw)
+                if (parsed.code.length >= 6) onQrLogin(parsed.code)
+            },
+            onDismiss = { scanning = false },
+        )
+    }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -312,9 +349,11 @@ private fun ParentLogin(
             modifier = Modifier.fillMaxWidth(),
         )
         Button(onClick = onLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("Войти")
+            Text(if (busy) "Проверяем…" else "Войти по токену")
         }
-        TextButton(onClick = onExit) { Text("Выйти в детский режим") }
+        Button(onClick = { scanning = true }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text("📷 Войти по QR")
+        }
         if (error != null) Text(error, color = PRed, fontSize = 12.sp)
     }
 }
@@ -696,39 +735,7 @@ private fun ParentMoneyScreen(
     }
 
     if (showZen) {
-        var token by remember { mutableStateOf("") }
-        var zenStatus by remember { mutableStateOf<String?>(null) }
-        AlertDialog(
-            onDismissRequest = { showZen = false },
-            title = { Text("Zen Money") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Добавь банк в приложении Zen Money/Zerro и вставь токен API.", color = PMuted, fontSize = 11.sp)
-                    OutlinedTextField(
-                        token,
-                        { token = it },
-                        label = { Text("Токен Zen Money") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    zenStatus?.let { Text(it, color = PAccent, fontSize = 11.sp) }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            runCatching {
-                                if (token.isNotBlank()) api().post("/api/zenmoney/token", JSONObject().put("token", token.trim()))
-                                api().post("/api/zenmoney/sync")
-                            }.onSuccess { zenStatus = "Токен сохранён, синхронизация запущена" }
-                                .onFailure { zenStatus = "Ошибка: ${it.message}" }
-                        }
-                    },
-                ) { Text("Сохранить и синхронизировать") }
-            },
-            dismissButton = { TextButton(onClick = { showZen = false }) { Text("Закрыть") } },
-        )
+        ZenMoneyDialog(api = { api() }, onClose = { showZen = false })
     }
 
     if (showBank) {
@@ -938,6 +945,45 @@ private fun ParentChildrenScreen(
     api: () -> ParentApi,
 ) {
     var policyChild by remember { mutableStateOf<ChildCard?>(null) }
+    var pairChild by remember { mutableStateOf<ChildCard?>(null) }
+    var pairCode by remember { mutableStateOf<String?>(null) }
+    var pairPayload by remember { mutableStateOf<String?>(null) }
+    var pairError by remember { mutableStateOf<String?>(null) }
+    var kcal by remember { mutableStateOf<Map<String, Pair<Int, Int>>>(emptyMap()) }
+    LaunchedEffect(api) {
+        runCatching {
+            val data = api().get("/api/guard/nutrition").optJSONObject("data")
+            val array = data?.optJSONArray("children") ?: return@runCatching
+            kcal = (0 until array.length()).associate { index ->
+                val item = array.getJSONObject(index)
+                item.optString("childId") to (item.optInt("consumed") to item.optInt("target"))
+            }
+        }
+    }
+    pairChild?.let { child ->
+        QrPairDialog(
+            child = child,
+            code = pairCode,
+            payload = pairPayload,
+            error = pairError,
+            onStart = {
+                pairChild = child
+                pairCode = null
+                pairPayload = null
+                pairError = null
+                kotlinx.coroutines.MainScope().launch {
+                    runCatching {
+                        api().post("/api/guard/pair/device", JSONObject().put("childId", child.id))
+                    }.onSuccess { root ->
+                        val data = root.optJSONObject("data")
+                        pairCode = data?.optString("code")
+                        pairPayload = data?.optString("payload")
+                    }.onFailure { pairError = it.message }
+                }
+            },
+            onDismiss = { pairChild = null; pairCode = null; pairPayload = null },
+        )
+    }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -968,16 +1014,208 @@ private fun ParentChildrenScreen(
                     OutlinedTextField(nickname, { nickname = it }, label = { Text("Никнейм") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(school, { school = it }, label = { Text("Школа") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(grade, { grade = it }, label = { Text("Класс") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    kcal[child.id]?.let { (eaten, target) ->
+                        val percent = if (target > 0) (eaten * 100 / target).coerceIn(0, 100) else 0
+                        Text("Калории сегодня: $eaten из $target ккал", fontSize = 12.sp, color = PMuted)
+                        LinearProgressIndicator(
+                            progress = { percent / 100f },
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = if (eaten > target) PRed else PAccent,
+                            trackColor = Color(0xFF1F2A37),
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { onSave(child.id, nickname, school, grade) }, enabled = !busy) {
                             Text("Сохранить")
                         }
-                        TextButton(onClick = { policyChild = child }) { Text("Лимит и режим") }
+                        TextButton(onClick = { policyChild = child }) { Text("Лимит") }
+                    }
+                    OutlinedButton(onClick = { pairChild = child }, modifier = Modifier.fillMaxWidth()) {
+                        Text("📷 Подключить телефон ребёнка")
                     }
                 }
             }
         }
     }
+}
+
+/** Zen Money: статус, подключение, синхронизация, отключение. */
+@Composable
+private fun ZenMoneyDialog(api: () -> ParentApi, onClose: () -> Unit) {
+    var connected by remember { mutableStateOf<Boolean?>(null) }
+    var masked by remember { mutableStateOf<String?>(null) }
+    var lastSync by remember { mutableStateOf<String?>(null) }
+    var token by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun reload() {
+        runCatching { api().get("/api/zenmoney/status").optJSONObject("data") }
+            .onSuccess { data ->
+                connected = data?.optBoolean("connected") ?: false
+                masked = data?.optString("masked")?.takeIf { it.isNotBlank() }
+                lastSync = data?.optString("lastSync")?.takeIf { it.isNotBlank() && it != "null" }
+            }
+            .onFailure { connected = false }
+    }
+
+    LaunchedEffect(Unit) { reload() }
+
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Zen Money") },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                when (connected) {
+                    null -> Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) { CircularProgressIndicator(Modifier.size(24.dp)) }
+
+                    true -> {
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0E2A22))) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Подключено", color = PAccent, fontWeight = FontWeight.SemiBold)
+                                masked?.let { Text("Токен $it", fontSize = 11.sp, color = PMuted) }
+                                Text(
+                                    lastSync?.let { "Последняя синхронизация: " + it.replace("T", " ").take(16) }
+                                        ?: "Ещё не синхронизировали",
+                                    fontSize = 11.sp,
+                                    color = PMuted,
+                                )
+                            }
+                        }
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    message = null
+                                    error = null
+                                    runCatching { api().post("/api/zenmoney/sync") }
+                                        .onSuccess { root ->
+                                            val stats = root.optJSONObject("data")
+                                            val accounts = stats?.optInt("accounts", 0) ?: 0
+                                            val transactions = stats?.optInt("transactions", 0) ?: 0
+                                            message = "Готово: счетов $accounts, операций $transactions"
+                                            reload()
+                                        }
+                                        .onFailure { error = it.message }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(if (busy) "Синхронизируем…" else "Синхронизировать") }
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    runCatching { api().delete("/api/zenmoney/token") }
+                                        .onSuccess { reload(); message = "Токен удалён" }
+                                        .onFailure { error = it.message }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy,
+                        ) { Text("Отключить", color = PRed) }
+                    }
+
+                    false -> {
+                        Text(
+                            "1. В Zen Money добавьте банк и счета.\n" +
+                                "2. Получите токен на zerro.app/token.\n" +
+                                "3. Вставьте токен сюда — Family OS подтянет операции.",
+                            fontSize = 12.sp,
+                            color = PMuted,
+                        )
+                        OutlinedTextField(
+                            token,
+                            { token = it.trim() },
+                            label = { Text("Токен") },
+                            placeholder = { Text("вставьте токен из Zerro") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    message = null
+                                    error = null
+                                    runCatching {
+                                        api().post("/api/zenmoney/token", JSONObject().put("token", token))
+                                        api().post("/api/zenmoney/sync")
+                                    }.onSuccess { root ->
+                                        val stats = root.optJSONObject("data")
+                                        val accounts = stats?.optInt("accounts", 0) ?: 0
+                                        val transactions = stats?.optInt("transactions", 0) ?: 0
+                                        token = ""
+                                        message = "Подключено и синхронизировано: счетов $accounts, операций $transactions"
+                                        reload()
+                                    }.onFailure { error = "Не получилось: ${it.message}" }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && token.length >= 10,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(if (busy) "Подключаем…" else "Подключить") }
+                    }
+                }
+
+                message?.let {
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0E2A22))) {
+                        Text(it, Modifier.padding(10.dp), color = PAccent, fontSize = 12.sp)
+                    }
+                }
+                error?.let {
+                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2A1214))) {
+                        Text(it, Modifier.padding(10.dp), color = PRed, fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Закрыть") } },
+    )
+}
+
+@Composable
+private fun QrPairDialog(
+    child: ChildCard,
+    code: String?,
+    payload: String?,
+    error: String?,
+    onStart: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    LaunchedEffect(child.id) { onStart() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Подключить телефон") },
+        text = {
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text("Откройте Family OS на телефоне ${child.nickname ?: child.name} и отсканируйте код", fontSize = 12.sp, color = PMuted)
+                when {
+                    payload != null -> {
+                        QrImage(payload)
+                        code?.let { Text("Код: $it", fontWeight = FontWeight.SemiBold) }
+                        Text("Код действует 15 минут и срабатывает один раз", fontSize = 11.sp, color = PMuted)
+                    }
+                    error != null -> Text("Ошибка: $error", color = PRed, fontSize = 12.sp)
+                    else -> CircularProgressIndicator(Modifier.size(28.dp))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Готово") } },
+    )
 }
 
 private fun formatMoney(value: Double, currency: String): String {

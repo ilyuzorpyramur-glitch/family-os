@@ -191,6 +191,21 @@ export function registerApi(app: FastifyInstance, ctx: Ctx): void {
     return { ok: true, data: { id, title: body.data.title.trim(), kind: body.data.kind } };
   });
 
+  app.get("/api/zenmoney/status", { preHandler: guard }, async () => {
+    const token = getZenMoneyToken(db, config.secret);
+    const updatedAt = getSetting(db, "zenmoney.token_updated_at");
+    const lastSync = getSetting(db, "zenmoney.last_sync");
+    return {
+      ok: true,
+      data: {
+        connected: Boolean(token),
+        masked: token ? maskToken(token) : null,
+        updatedAt,
+        lastSync,
+      },
+    };
+  });
+
   app.post("/api/zenmoney/token", { preHandler: guard }, async (request, reply) => {
     const body = z.object({ token: z.string().min(10) }).safeParse(request.body);
     if (!body.success) {

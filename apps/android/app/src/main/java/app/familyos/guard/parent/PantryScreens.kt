@@ -37,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.familyos.guard.api.ParentApi
+import app.familyos.guard.scan.CodeScannerDialog
 import app.familyos.guard.data.Product
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -173,6 +174,7 @@ private fun ShoppingModeDialog(
     var bought by remember { mutableStateOf<Set<String>>(emptySet()) }
     var barcode by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
+    var scanning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -206,17 +208,17 @@ private fun ShoppingModeDialog(
                         Text(item.unit, fontSize = 11.sp, color = PntMuted)
                     }
                 }
-                OutlinedTextField(
-                    barcode,
-                    { barcode = it },
-                    label = { Text("Штрихкод товара") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Button(
-                    onClick = {
-                        val code = barcode.trim()
-                        if (code.length >= 4) {
+                Button(onClick = { scanning = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("📷 Сканировать товар")
+                }
+                TextButton(onClick = { barcode = "" }) { Text("ввести вручную", fontSize = 11.sp) }
+                if (scanning) {
+                    CodeScannerDialog(
+                        title = "Сканировать товар",
+                        hint = "Наведите камеру на штрихкод упаковки",
+                        onResult = { code ->
+                            scanning = false
+                            barcode = code
                             scope.launch {
                                 val result = runCatching {
                                     api().post("/api/products/scan", JSONObject().put("barcode", code).put("quantity", 1))
@@ -226,17 +228,16 @@ private fun ShoppingModeDialog(
                                         val product = root.optJSONObject("data")?.optJSONObject("product")
                                         val name = product?.optString("title") ?: "товар"
                                         bought = bought + items.filter { it.title.equals(name, true) }.map { it.title }
-                                        "Добавлено: $name"
+                                        "Куплено: $name"
                                     },
                                     { "Ошибка: ${it.message}" },
                                 )
-                                barcode = ""
                                 onChanged(status ?: "")
                             }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Отсканировать") }
+                        },
+                        onDismiss = { scanning = false },
+                    )
+                }
                 status?.let { Text(it, color = PntAccent, fontSize = 11.sp) }
             }
         },
@@ -256,7 +257,24 @@ private fun UsageModeDialog(
     var amount by remember { mutableStateOf("1") }
     var unit by remember { mutableStateOf("шт") }
     var status by remember { mutableStateOf<String?>(null) }
+    var scanning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    fun lookup(code: String) {
+        scope.launch {
+            runCatching {
+                val root = api().get("/api/products/barcode/$code").optJSONObject("data")
+                val local = root?.optJSONObject("product")
+                if (local != null && root.optString("source") == "local") {
+                    product = Product.fromJson(local)
+                    unit = product?.unit ?: "шт"
+                    status = null
+                } else {
+                    status = "Товара нет на складе — сначала добавь его"
+                }
+            }.onFailure { status = "Ошибка: ${it.message}" }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -264,34 +282,21 @@ private fun UsageModeDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Отсканируй товар, который используешь, и укажи количество", color = PntMuted, fontSize = 11.sp)
-                OutlinedTextField(
-                    barcode,
-                    { barcode = it },
-                    label = { Text("Штрихкод") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Button(
-                    onClick = {
-                        val code = barcode.trim()
-                        if (code.length >= 4) {
-                            scope.launch {
-                                runCatching {
-                                    val root = api().get("/api/products/barcode/$code").optJSONObject("data")
-                                    val local = root?.optJSONObject("product")
-                                    if (local != null && root.optString("source") == "local") {
-                                        product = Product.fromJson(local)
-                                        unit = product?.unit ?: "шт"
-                                        status = null
-                                    } else {
-                                        status = "Товара нет на складе — сначала добавь его"
-                                    }
-                                }.onFailure { status = "Ошибка: ${it.message}" }
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Найти") }
+                Button(onClick = { scanning = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("📷 Сканировать товар")
+                }
+                if (scanning) {
+                    CodeScannerDialog(
+                        title = "Что используешь?",
+                        hint = "Наведите камеру на штрихкод",
+                        onResult = { code ->
+                            scanning = false
+                            barcode = code
+                            lookup(code)
+                        },
+                        onDismiss = { scanning = false },
+                    )
+                }
 
                 product?.let { found ->
                     Text(found.title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)

@@ -399,6 +399,29 @@ CREATE TABLE IF NOT EXISTS location_pings (
 
 CREATE INDEX IF NOT EXISTS idx_pings_child ON location_pings(child_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS pair_codes (
+  code       TEXT PRIMARY KEY,
+  kind       TEXT NOT NULL,
+  child_id   TEXT,
+  device_id  TEXT,
+  expires_at TEXT NOT NULL,
+  used_at    TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS meals (
+  id         TEXT PRIMARY KEY,
+  child_id   TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  date       TEXT NOT NULL,
+  title      TEXT NOT NULL,
+  kcal       REAL NOT NULL DEFAULT 0,
+  grams      REAL,
+  source     TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_meals_child_date ON meals(child_id, date);
+
 CREATE TABLE IF NOT EXISTS geofences (
   id           TEXT PRIMARY KEY,
   child_id     TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
@@ -443,6 +466,7 @@ export function openDb(file: string): DB {
   addColumn(db, "quests", "session_start", "session_start TEXT");
   addColumn(db, "quests", "session_end", "session_end TEXT");
   addColumn(db, "blocked_sites", "kind", "kind TEXT NOT NULL DEFAULT 'block'");
+  addColumn(db, "children", "kcal_target", "kcal_target INTEGER NOT NULL DEFAULT 2000");
   return db;
 }
 

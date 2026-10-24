@@ -21,6 +21,9 @@ class ParentApi(var baseUrl: String, var token: String) {
     suspend fun patch(path: String, body: JSONObject): JSONObject =
         withContext(Dispatchers.IO) { call("PATCH", path, body) }
 
+    suspend fun delete(path: String): JSONObject =
+        withContext(Dispatchers.IO) { call("DELETE", path, null) }
+
     private fun call(method: String, path: String, body: JSONObject?): JSONObject {
         val base = baseUrl.trim().trimEnd('/')
         if (base.isBlank()) throw IOException("Не задан адрес сервера")
