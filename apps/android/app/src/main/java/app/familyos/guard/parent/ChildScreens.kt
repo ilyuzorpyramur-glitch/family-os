@@ -193,7 +193,7 @@ private fun ChildCardLarge(
                             child.place?.let { "Сейчас в $it" } ?: "Геопозиция не передана",
                             fontSize = 12.sp,
                             color = app.familyos.guard.ui.textPrimary.copy(alpha = 0.85f),
-                            maxLines = 1,
+                            maxLines = 2,
                         )
                     }
                     Text(
