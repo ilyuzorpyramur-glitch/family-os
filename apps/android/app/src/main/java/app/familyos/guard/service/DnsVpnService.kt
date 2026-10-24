@@ -102,14 +102,20 @@ class DnsVpnService : VpnService() {
         val buffer = ByteArray(32767)
 
         while (running) {
-            val length = runCatching { input.read(buffer) }.getOrElse { break }
+            val length = try {
+                input.read(buffer)
+            } catch (error: Exception) {
+                break
+            }
             if (length <= 0) continue
             val packet = buffer.copyOf(length)
-            runCatching {
+            try {
                 val reply = handle(packet)
                 if (reply != null) {
                     output.write(reply)
                 }
+            } catch (error: Exception) {
+                // битый пакет — пропускаем
             }
         }
         runCatching { reportVisited() }
