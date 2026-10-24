@@ -189,13 +189,20 @@ def round_icon(image: Image.Image) -> Image.Image:
 
 
 def adaptive_foreground(color_icon: Image.Image, target: int = 432) -> Image.Image:
-    """House в центральной безопасной зоне (66 из 108), фон прозрачный."""
+    """Дом в безопасной зоне adaptive-иконки, фон прозрачный.
+
+    Кроп считаем от реального размера картинки: базовый холст рисуется
+    с суперсэмплингом и вчетверо больше логической сетки.
+    """
     canvas = Image.new("RGBA", (target, target), (0, 0, 0, 0))
-    inner = int(target * 0.62)
-    house = color_icon.crop((int(S * 0.06), int(S * 0.10), int(S * 0.94), int(S * 0.92)))
-    house = house.resize((inner, inner), Image.LANCZOS)
+    side = color_icon.size[0]
+    crop = color_icon.crop(
+        (int(side * 0.08), int(side * 0.08), int(side * 0.92), int(side * 0.92))
+    )
+    inner = int(target * 0.64)
+    crop = crop.resize((inner, inner), Image.LANCZOS)
     offset = (target - inner) // 2
-    canvas.alpha_composite(house, (offset, offset))
+    canvas.alpha_composite(crop, (offset, offset))
     return canvas
 
 
@@ -215,10 +222,17 @@ def write_flavor(role: str, accent_top: str, accent_bottom: str, glow: str, out_
     transparent = build(accent_top, accent_bottom, glow, role, with_border=False, background=False)
     drawable = os.path.join(out_root, "drawable")
     os.makedirs(drawable, exist_ok=True)
+    drawable_dir_xxx = os.path.join(out_root, "drawable-xxxhdpi")
     for density, px in (("mdpi", 108), ("hdpi", 162), ("xhdpi", 216), ("xxhdpi", 324), ("xxxhdpi", 432)):
         folder = os.path.join(out_root, f"drawable-{density}")
         os.makedirs(folder, exist_ok=True)
         adaptive_foreground(transparent, px).save(os.path.join(folder, "ic_launcher_foreground.png"))
+
+    # Страховка: пустой foreground даёт чёрный квадрат в лончере.
+    probe = Image.open(os.path.join(drawable_dir_xxx, "ic_launcher_foreground.png")).getchannel("A")
+    opaque = sum(1 for value in probe.get_flattened_data() if value > 10)
+    if opaque < 5000:
+        raise SystemExit(f"foreground пустой: {opaque} непрозрачных пикселей")
 
     # Любая плотность: adaptive-описание.
     anydpi = os.path.join(out_root, "mipmap-anydpi-v26")
