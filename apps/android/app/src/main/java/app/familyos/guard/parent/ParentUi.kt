@@ -127,7 +127,7 @@ fun ParentApp(
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             when (tab) {
-                1 -> ParentOverview(children, events.size, busy) {
+                1 -> ParentOverview(children, events.size, busy, api = { api() }) {
                     scope.launch { busy = true; loadAll(); busy = false }
                 }
                 2 -> ParentMoneyScreen(
@@ -300,7 +300,13 @@ private fun ParentLogin(
 }
 
 @Composable
-private fun ParentOverview(children: List<ChildCard>, pendingEvents: Int, busy: Boolean, onRefresh: () -> Unit) {
+private fun ParentOverview(
+    children: List<ChildCard>,
+    pendingEvents: Int,
+    busy: Boolean,
+    api: () -> ParentApi,
+    onRefresh: () -> Unit,
+) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
