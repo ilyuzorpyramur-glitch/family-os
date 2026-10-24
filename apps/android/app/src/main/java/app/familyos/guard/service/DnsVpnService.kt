@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
@@ -49,7 +50,11 @@ class DnsVpnService : VpnService() {
         store = GuardStore(this)
         loadRules()
         createChannel()
-        startForeground(2002, notification())
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(2002, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(2002, notification())
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
