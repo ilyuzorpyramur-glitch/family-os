@@ -30,9 +30,9 @@ val accentCard: Color = accentDeep.copy(alpha = 0.55f)
 val bg: Color = Color(0xFF080A0F)
 
 /** Карточки полупрозрачные: сквозь них видно сияние фона. */
-val cardBg: Color = Color(0xF213161E)
-val cardBgAlt: Color = Color(0xE81A1E28)
-val cardBorder: Color = Color(0x24FFFFFF)
+val cardBg: Color = Color(0xD9161B24)
+val cardBgAlt: Color = Color(0xC71E2430)
+val cardBorder: Color = Color(0x1FFFFFFF)
 val textPrimary: Color = Color(0xFFE9EEF5)
 val textMuted: Color = Color(0xFF8B94A6)
 val danger: Color = Color(0xFFF87171)

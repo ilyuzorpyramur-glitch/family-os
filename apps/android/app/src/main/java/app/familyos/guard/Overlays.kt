@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -65,19 +66,18 @@ private val barItems = listOf(
  */
 @Composable
 fun BottomBar(selected: Int, onSelect: (Int) -> Unit) {
-    Surface(color = BarBg, tonalElevation = 0.dp) {
-        Column {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(app.familyos.guard.ui.cardBorder.copy(alpha = 0.6f)),
-            )
+    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = Color(0xF00B0E14),
+            border = BorderStroke(1.dp, Color(0x1FFFFFFF)),
+            shadowElevation = 18.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 6.dp)
-                    .padding(bottom = 6.dp),
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -1,5 +1,6 @@
 package app.familyos.guard.parent
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -304,15 +306,25 @@ fun ParentApp(
                 Text("ок", color = PMuted, fontSize = 11.sp, modifier = Modifier.clickable { error = null })
             }
         }
-        Row(
-            Modifier.fillMaxWidth().background(Color(0xE60E1219)).padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            PTab("Обзор", Icons.Filled.Home, tab == 1) { tab = 1 }
-            PTab("Деньги", Icons.Filled.ShoppingCart, tab == 2) { tab = 2 }
-            PTab("События", Icons.Filled.DateRange, tab == 3) { tab = 3 }
-            PTab("Склад", Icons.Filled.List, tab == 4) { tab = 4 }
-            PTab("Дети", Icons.Filled.Person, tab == 0) { tab = 0 }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = Color(0xF00B0E14),
+                border = BorderStroke(1.dp, Color(0x1FFFFFFF)),
+                shadowElevation = 18.dp,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    PTab("Обзор", Icons.Filled.Home, tab == 1) { tab = 1 }
+                    PTab("Деньги", Icons.Filled.ShoppingCart, tab == 2) { tab = 2 }
+                    PTab("События", Icons.Filled.DateRange, tab == 3) { tab = 3 }
+                    PTab("Склад", Icons.Filled.List, tab == 4) { tab = 4 }
+                    PTab("Дети", Icons.Filled.Person, tab == 0) { tab = 0 }
+                }
+            }
         }
     }
 }

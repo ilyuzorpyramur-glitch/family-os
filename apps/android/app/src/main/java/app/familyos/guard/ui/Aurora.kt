@@ -25,7 +25,7 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable () -> U
             // Верхнее левое пятно — основной акцент.
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(accent.copy(alpha = 0.30f), Color.Transparent),
+                    colors = listOf(accent.copy(alpha = 0.52f), Color.Transparent),
                     center = Offset(w * 0.10f, h * 0.02f),
                     radius = w * 0.95f,
                 ),
@@ -36,7 +36,7 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable () -> U
             // Верхнее правое — второй акцент, даёт перелив.
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(accent2.copy(alpha = 0.16f), Color.Transparent),
+                    colors = listOf(accent2.copy(alpha = 0.30f), Color.Transparent),
                     center = Offset(w * 1.02f, h * 0.14f),
                     radius = w * 0.78f,
                 ),
@@ -47,12 +47,23 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable () -> U
             // Нижнее свечение — глубина под контентом.
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(accentDeep.copy(alpha = 0.85f), Color.Transparent),
+                    colors = listOf(accent.copy(alpha = 0.22f), Color.Transparent),
                     center = Offset(w * 0.5f, h * 1.05f),
                     radius = w * 1.1f,
                 ),
                 radius = w * 1.1f,
                 center = Offset(w * 0.5f, h * 1.05f),
+            )
+
+            // Среднее пятно — перелив по центру.
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(accent2.copy(alpha = 0.10f), Color.Transparent),
+                    center = Offset(w * 0.0f, h * 0.55f),
+                    radius = w * 0.7f,
+                ),
+                radius = w * 0.7f,
+                center = Offset(w * 0.0f, h * 0.55f),
             )
 
             // Легкое затемнение снизу, чтобы нижняя панель читалась.
