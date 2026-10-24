@@ -39,11 +39,19 @@ class AppBlockService : AccessibilityService() {
 
         if (LockActivity.visible) return
 
+        if (store.sessionActive) {
+            blockNow(packageName, "session")
+            return
+        }
         val policy = store.policy() ?: return
         val reason = policy.blockReasonAt()
         if (reason == null) return
         Log.i(TAG, "blocking $packageName, reason=$reason")
 
+        blockNow(packageName, reason)
+    }
+
+    private fun blockNow(packageName: String, reason: String) {
         val now = System.currentTimeMillis()
         if (now - lastBlockAt < 5_000) return
         lastBlockAt = now

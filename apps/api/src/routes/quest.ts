@@ -2,7 +2,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { bearerActor, isAdminCookie } from "../auth.js";
 import type { Ctx } from "./api.js";
+import { addShoppingItems, activeSession, checkShoppingItem, finishSession, finishSessionsForQuest, shoppingProgress, startSession } from "../repo/sessions.js";
 import { findDeviceByToken, getChild } from "../repo/guard.js";
+import { getRecipe } from "../repo/pantry.js";
 import {
   addQuestPhoto,
   buyItem,
@@ -10,6 +12,7 @@ import {
   completeQuest,
   createQuest,
   createShopItem,
+  getQuest,
   decidePurchase,
   decideQuest,
   listPurchases,
@@ -70,6 +73,13 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
         approval: z.enum(["parent", "agent"]).default("parent"),
         photosRequired: z.number().int().min(0).max(10).default(0),
         shared: z.boolean().default(false),
+        questType: z.enum(["task", "shopping", "cooking"]).default("task"),
+        recipeId: z.string().nullable().optional(),
+        sessionMinutes: z.number().int().min(0).max(600).default(0),
+        shoppingItems: z
+          .array(z.object({ title: z.string().min(1).max(120), barcode: z.string().max(64).nullable().optional() }))
+          .max(60)
+          .optional(),
       })
       .safeParse(request.body);
 
@@ -85,6 +95,9 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
       childId = first.id;
     }
     const quest = createQuest(db, { childId, ...body.data, createdBy: author });
+    if (body.data.questType === "shopping" && body.data.shoppingItems?.length) {
+      addShoppingItems(db, quest.id, body.data.shoppingItems);
+    }
     return { ok: true, data: quest };
   });
 
@@ -275,6 +288,65 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
         })),
       },
     };
+  });
+
+  app.get("/api/device/quests/:id/details", { preHandler: deviceGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const quest = getQuest(db, id);
+    if (!quest) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Задание не найдено" } });
+    const shopping = quest.quest_type === "shopping" ? shoppingProgress(db, id) : null;
+    const recipe = quest.recipe_id ? getRecipe(db, quest.recipe_id) : null;
+    return {
+      ok: true,
+      data: {
+        id,
+        title: quest.title,
+        type: quest.quest_type,
+        sessionMinutes: quest.session_minutes,
+        shopping,
+        recipe: recipe
+          ? {
+              id: recipe.id,
+              title: recipe.title,
+              minutes: recipe.minutes,
+              steps: recipe.stepsList,
+              items: recipe.items.map((item: { title: string; quantity: number; unit: string }) => ({
+                title: item.title,
+                quantity: item.quantity,
+                unit: item.unit,
+              })),
+              canCook: recipe.canCook,
+            }
+          : null,
+      },
+    };
+  });
+
+  app.post("/api/device/quests/:id/start", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const { id } = request.params as { id: string };
+    const quest = getQuest(db, id);
+    if (!quest) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Задание не найдено" } });
+    const minutes = quest.session_minutes > 0 ? quest.session_minutes : 45;
+    const session = startSession(db, id, device.child_id, minutes);
+    return { ok: true, data: session };
+  });
+
+  app.post("/api/device/quests/:id/finish", { preHandler: deviceGuard }, async (request) => {
+    const { id } = request.params as { id: string };
+    finishSessionsForQuest(db, id);
+    return { ok: true };
+  });
+
+  /** Отметка покупки сканированием штрихкода. */
+  app.post("/api/device/quests/:id/scan", { preHandler: deviceGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ barcode: z.string().min(1).max(64) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужен штрихкод" } });
+    }
+    const result = checkShoppingItem(db, id, body.data.barcode.trim());
+    return { ok: true, data: result };
   });
 
   app.get("/api/device/shop", { preHandler: deviceGuard }, async (request) => {

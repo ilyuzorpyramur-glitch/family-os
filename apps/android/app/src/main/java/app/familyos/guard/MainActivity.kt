@@ -74,6 +74,7 @@ import app.familyos.guard.data.Product
 import app.familyos.guard.data.ProfileData
 import app.familyos.guard.data.Recipe
 import app.familyos.guard.data.QuestData
+import app.familyos.guard.data.QuestItem
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.service.AppBlockService
 import app.familyos.guard.work.GuardNotifications
@@ -104,6 +105,9 @@ class MainActivity : ComponentActivity() {
     private var home by mutableStateOf<HomeData?>(null)
     private var profile by mutableStateOf<ProfileData?>(null)
     private var calendar by mutableStateOf<CalendarData?>(null)
+    private var scanQuest by mutableStateOf<QuestItem?>(null)
+    private var cookQuest by mutableStateOf<QuestItem?>(null)
+    private var session by mutableStateOf<org.json.JSONObject?>(null)
     private var recipes by mutableStateOf<List<Recipe>>(emptyList())
     private var products by mutableStateOf<List<Product>>(emptyList())
     private var levelUpLevel by mutableStateOf<Int?>(null)
@@ -183,7 +187,14 @@ class MainActivity : ComponentActivity() {
                     if (state.configured) {
                         Column(Modifier.fillMaxSize().statusBarsPadding()) {
                             Box(Modifier.weight(1f)) {
-                                when (tab) {
+                                val active = session
+                                if (active != null) {
+                                    SessionBlockScreen(
+                                        title = active.optString("title", "Задание"),
+                                        endsAt = active.optString("endsAt").substringAfter('T').take(5),
+                                        onFinish = { finishSessionNow(active.optString("questId")) },
+                                    )
+                                } else when (tab) {
                                     0 -> HomeScreen(
                                         home = home,
                                         busy = busy,
@@ -201,6 +212,8 @@ class MainActivity : ComponentActivity() {
                                         message = message,
                                         onComplete = { id, photos -> startQuest(id, photos) },
                                         onClaim = { claimQuest(it) },
+                                        onScan = { scanQuest = it },
+                                        onCook = { cookQuest = it },
                                         onRefresh = { refresh() },
                                     )
                                     2 -> ShopScreen(
@@ -213,15 +226,7 @@ class MainActivity : ComponentActivity() {
                                         onPickPhoto = { startProposalPhoto() },
                                         onPropose = { title, description -> proposeItem(title, description) },
                                     )
-                                    3 -> RecipesScreen(
-                                        recipes = recipes,
-                                        products = products,
-                                        busy = busy,
-                                        message = message,
-                                        onCook = { cookRecipe(it) },
-                                        onRefresh = { refresh() },
-                                    )
-                                    4 -> Dashboard(
+                                    3 -> Dashboard(
                                         state = state,
                                         busy = busy,
                                         message = message,
@@ -242,6 +247,35 @@ class MainActivity : ComponentActivity() {
                                         onOpenParent = {
                                             startActivity(Intent(this@MainActivity, ParentActivity::class.java))
                                         },
+                                    )
+                                }
+                                scanQuest?.let { quest ->
+                                    ShoppingQuestDialog(
+                                        questId = quest.id,
+                                        title = quest.title,
+                                        busy = busy,
+                                        loadDetails = { id -> ApiClient(store).questDetails(id) },
+                                        onScan = { id, code -> ApiClient(store).scanQuestItem(id, code) },
+                                        onFinish = {
+                                            val id = quest.id
+                                            scanQuest = null
+                                            completeAndClose(id)
+                                        },
+                                        onDismiss = { scanQuest = null },
+                                    )
+                                }
+                                cookQuest?.let { quest ->
+                                    CookingQuestDialog(
+                                        questId = quest.id,
+                                        title = quest.title,
+                                        busy = busy,
+                                        loadDetails = { id -> ApiClient(store).questDetails(id) },
+                                        onFinish = {
+                                            val id = quest.id
+                                            cookQuest = null
+                                            completeAndClose(id)
+                                        },
+                                        onDismiss = { cookQuest = null },
                                     )
                                 }
                                 levelUpLevel?.let { level ->
@@ -327,6 +361,10 @@ class MainActivity : ComponentActivity() {
             }
             runCatching { api.profile() }.onSuccess { profile = it }
             runCatching { api.calendar(YearMonth.now().toString()) }.onSuccess { calendar = it }
+            runCatching { api.policySession() }.onSuccess {
+                session = it
+                store.sessionActive = it != null
+            }
             runCatching { api.recipes() }.onSuccess { recipes = it }
             runCatching { api.products() }.onSuccess { products = it }
             flushOutbox(api)
@@ -444,6 +482,34 @@ class MainActivity : ComponentActivity() {
                         message = it.message
                     }
                 }
+            busy = false
+        }
+    }
+
+    private fun finishSessionNow(questId: String) {
+        if (questId.isBlank()) return
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching { api.finishQuest(questId) }
+            completeAndClose(questId)
+            busy = false
+        }
+    }
+
+    private fun completeAndClose(questId: String) {
+        lifecycleScope.launch {
+            busy = true
+            val api = ApiClient(store)
+            runCatching {
+                api.completeQuest(questId)
+                api.finishQuest(questId)
+                store.sessionActive = false
+                session = null
+                quests = api.quests()
+                home = api.home()
+                message = "Задание отмечено"
+            }.onFailure { message = it.message }
             busy = false
         }
     }

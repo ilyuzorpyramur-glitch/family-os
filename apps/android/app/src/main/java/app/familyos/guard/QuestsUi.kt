@@ -50,6 +50,8 @@ fun QuestsScreen(
     message: String?,
     onComplete: (String, Boolean) -> Unit,
     onClaim: (String) -> Unit,
+    onScan: (QuestItem) -> Unit,
+    onCook: (QuestItem) -> Unit,
     onRefresh: () -> Unit,
 ) {
     Column(
@@ -85,7 +87,7 @@ fun QuestsScreen(
             Text("Новых заданий нет.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             active.forEach { quest ->
-                QuestCard(quest, busy, onComplete, onClaim)
+                QuestCard(quest, busy, onComplete, onClaim, onScan, onCook)
             }
         }
 
@@ -182,6 +184,8 @@ private fun QuestCard(
     busy: Boolean,
     onComplete: (String, Boolean) -> Unit,
     onClaim: (String) -> Unit,
+    onScan: (QuestItem) -> Unit,
+    onCook: (QuestItem) -> Unit,
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(14.dp)) {
@@ -197,7 +201,19 @@ private fun QuestCard(
                 fontSize = 12.sp,
             )
             Spacer(Modifier.height(10.dp))
-            if (quest.shared) {
+            if (quest.questType == "shopping") {
+                Button(
+                    onClick = { onScan(quest) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Сканировать покупки") }
+            } else if (quest.questType == "cooking") {
+                Button(
+                    onClick = { onCook(quest) },
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Готовить по шагам") }
+            } else if (quest.shared) {
                 Button(
                     onClick = { onClaim(quest.id) },
                     enabled = !busy,

@@ -29,6 +29,9 @@ export type QuestRow = {
   approval: string;
   photos_required: number;
   shared: number;
+  quest_type: string;
+  recipe_id: string | null;
+  session_minutes: number;
   created_by: string;
   created_at: string;
   completed_at: string | null;
@@ -116,13 +119,16 @@ export type QuestInput = {
   approval?: "parent" | "agent";
   photosRequired?: number;
   shared?: boolean;
+  questType?: "task" | "shopping" | "cooking";
+  recipeId?: string | null;
+  sessionMinutes?: number;
 };
 
 export function createQuest(db: DB, input: QuestInput): QuestRow {
   const id = `q_${crypto.randomUUID()}`;
   db.prepare(
-    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required, shared)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required, shared, quest_type, recipe_id, session_minutes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.childId,
@@ -137,6 +143,9 @@ export function createQuest(db: DB, input: QuestInput): QuestRow {
     input.approval ?? "parent",
     Math.max(0, Math.min(10, Math.round(input.photosRequired ?? 0))),
     input.shared ? 1 : 0,
+    input.questType ?? "task",
+    input.recipeId ?? null,
+    Math.max(0, Math.min(600, Math.round(input.sessionMinutes ?? 0))),
   );
   addQuestEvent(db, input.childId, id, "created", { by: input.createdBy ?? "parent" });
   return getQuest(db, id)!;

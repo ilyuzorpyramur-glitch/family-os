@@ -4,6 +4,8 @@ import { bearerActor, isAdminCookie } from "../auth.js";
 import type { Ctx } from "./api.js";
 import { localDateISO } from "../lib/time.js";
 import { ensureProfile, profileView, refreshRecurring } from "../repo/quest.js";
+import { activeSession } from "../repo/sessions.js";
+import { addBlocked, listBlocked, listVisits, recordVisits, removeBlocked } from "../repo/sites.js";
 import { homeData, processLocation } from "../repo/geo.js";
 import { imageUrl, saveImage } from "../uploads.js";
 import {
@@ -129,6 +131,40 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
     } catch (error) {
       return reply.code(400).send({ ok: false, error: { code: "REQUEST_REJECTED", message: (error as Error).message } });
     }
+  });
+
+  app.get("/api/guard/sites", { preHandler: parentGuard }, async (request) => {
+    const q = request.query as { childId?: string };
+    return { ok: true, data: listVisits(db, { childId: q.childId, limit: 150 }) };
+  });
+
+  app.get("/api/guard/sites/blocked", { preHandler: parentGuard }, async () => ({ ok: true, data: listBlocked(db) }));
+
+  app.post("/api/guard/sites/blocked", { preHandler: parentGuard }, async (request, reply) => {
+    const body = z.object({ domain: z.string().min(3).max(200), reason: z.string().max(200).optional() }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужен домен" } });
+    }
+    return { ok: true, data: addBlocked(db, body.data.domain, body.data.reason ?? null) };
+  });
+
+  app.delete("/api/guard/sites/blocked/:domain", { preHandler: parentGuard }, async (request) => {
+    const { domain } = request.params as { domain: string };
+    removeBlocked(db, decodeURIComponent(domain));
+    return { ok: true };
+  });
+
+  app.get("/api/guard/usage/apps", { preHandler: parentGuard }, async (request) => {
+    const q = request.query as { childId?: string; date?: string };
+    const date = q.date ?? localDateISO();
+    const rows = db
+      .prepare(
+        `SELECT ua.child_id, ua.package_id, ua.label, ua.minutes FROM usage_apps ua
+         WHERE ua.date = ? ${q.childId ? "AND ua.child_id = ?" : ""}
+         ORDER BY ua.minutes DESC LIMIT 100`,
+      )
+      .all(...(q.childId ? [date, q.childId] : [date]));
+    return { ok: true, data: { date, apps: rows } };
   });
 
   app.get("/api/guard/crashes", { preHandler: parentGuard }, async () => ({
@@ -361,11 +397,33 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
         blockReason: currentBlockReason(policy, usage.minutes),
         remainMinutes: Math.max(0, effectiveLimit(policy, today) - usage.minutes),
         coins: profile.coins,
+        session: (() => {
+          const active = activeSession(db, device.child_id);
+          if (!active) return null;
+          const quest = db.prepare("SELECT title FROM quests WHERE id = ?").get(active.quest_id) as
+            | { title: string }
+            | undefined;
+          return { id: active.id, questId: active.quest_id, title: quest?.title ?? "Задание", endsAt: active.ends_at };
+        })(),
         extension: { minutes: 30, costCoins: 50 },
         serverTime: new Date().toISOString(),
       },
     };
   });
+
+  app.post("/api/device/sites", { preHandler: deviceGuard }, async (request, reply) => {
+    const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;
+    const body = z.object({ domains: z.array(z.string().max(200)).max(200) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужен список доменов" } });
+    }
+    return { ok: true, data: recordVisits(db, device.child_id, body.data.domains) };
+  });
+
+  app.get("/api/device/sites/blocklist", { preHandler: deviceGuard }, async () => ({
+    ok: true,
+    data: { domains: listBlocked(db).map((row) => row.domain) },
+  }));
 
   app.get("/api/device/geofences", { preHandler: deviceGuard }, async (request) => {
     const device = (request as FastifyRequest & { device: NonNullable<ReturnType<typeof deviceFromRequest>> }).device;

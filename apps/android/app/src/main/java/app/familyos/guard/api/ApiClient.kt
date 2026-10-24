@@ -61,6 +61,29 @@ class ApiClient(private val store: GuardStore) {
         QuestData.fromJson(call("GET", "/api/device/quests", null))
     }
 
+    suspend fun questDetails(questId: String): JSONObject = withContext(Dispatchers.IO) {
+        call("GET", "/api/device/quests/$questId/details", null).optJSONObject("data") ?: JSONObject()
+    }
+
+    suspend fun startQuest(questId: String): JSONObject = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/quests/$questId/start", JSONObject()).optJSONObject("data") ?: JSONObject()
+    }
+
+    suspend fun finishQuest(questId: String) = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/quests/$questId/finish", JSONObject())
+        Unit
+    }
+
+    suspend fun scanQuestItem(questId: String, barcode: String): JSONObject = withContext(Dispatchers.IO) {
+        call("POST", "/api/device/quests/$questId/scan", JSONObject().put("barcode", barcode))
+            .optJSONObject("data") ?: JSONObject()
+    }
+
+    suspend fun policySession(): JSONObject? = withContext(Dispatchers.IO) {
+        val data = call("GET", "/api/device/policy", null).optJSONObject("data") ?: return@withContext null
+        if (data.isNull("session")) null else data.optJSONObject("session")
+    }
+
     suspend fun claimQuest(questId: String) = withContext(Dispatchers.IO) {
         call("POST", "/api/device/quests/$questId/claim", JSONObject())
         Unit

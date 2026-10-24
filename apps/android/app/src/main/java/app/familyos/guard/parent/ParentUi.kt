@@ -309,6 +309,8 @@ private fun ParentOverview(children: List<ChildCard>, pendingEvents: Int, busy: 
             Text("Обзор", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
         }
+        ParentQuestCreator(children = children, api = { api() }, onDone = onRefresh)
+
         if (pendingEvents > 0) {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2308))) {
                 Text("$pendingEvents событий ждут подтверждения", Modifier.padding(14.dp), color = PGold)
@@ -367,6 +369,112 @@ private fun ParentOverview(children: List<ChildCard>, pendingEvents: Int, busy: 
             }
         }
     }
+}
+
+@Composable
+private fun ParentQuestCreator(
+    children: List<ChildCard>,
+    api: () -> ParentApi,
+    onDone: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    var childIndex by remember { mutableStateOf(0) }
+    var title by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf("task") }
+    var shoppingRaw by remember { mutableStateOf("") }
+    var minutes by remember { mutableStateOf("45") }
+    var recipes by remember { mutableStateOf<List<app.familyos.guard.data.Recipe>>(emptyList()) }
+    var recipeId by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Button(onClick = { open = true; scope.launch { runCatching { recipes = app.familyos.guard.data.Recipe.listFrom(api().get("/api/recipes")) } } }, modifier = Modifier.fillMaxWidth()) {
+        Text("Новое задание")
+    }
+    status?.let { Text(it, color = PAccent, fontSize = 11.sp) }
+
+    if (!open) return
+
+    AlertDialog(
+        onDismissRequest = { open = false },
+        title = { Text("Новое задание") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Кому", color = PMuted, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    children.forEachIndexed { index, child ->
+                        FilterPill(child.nickname ?: child.name, childIndex == index) { childIndex = index }
+                    }
+                }
+                OutlinedTextField(title, { title = it }, label = { Text("Название") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("Тип", color = PMuted, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterPill("Обычное", type == "task") { type = "task" }
+                    FilterPill("Покупки", type == "shopping") { type = "shopping" }
+                    FilterPill("Готовка", type == "cooking") { type = "cooking" }
+                }
+                if (type == "shopping") {
+                    OutlinedTextField(
+                        shoppingRaw,
+                        { shoppingRaw = it },
+                        label = { Text("Список покупок, по строке") },
+                        minLines = 4,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("Ребёнок отметит их сканированием штрихкодов.", color = PMuted, fontSize = 10.sp)
+                }
+                if (type == "cooking") {
+                    Text("Рецепты из остатков", color = PMuted, fontSize = 11.sp)
+                    val available = recipes.filter { it.canCook }
+                    if (available.isEmpty()) {
+                        Text("Нет рецептов, на которые хватает продуктов", color = Color(0xFFF87171), fontSize = 11.sp)
+                    }
+                    available.forEach { recipe ->
+                        FilterPill(recipe.title, recipeId == recipe.id) { recipeId = recipe.id }
+                    }
+                }
+                OutlinedTextField(minutes, { minutes = it }, label = { Text("Минут на задание") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val child = children.getOrNull(childIndex) ?: return@TextButton
+                    val body = JSONObject()
+                        .put("title", title.trim())
+                        .put("questType", type)
+                        .put("xp", 20)
+                        .put("coins", 10)
+                        .put("approval", "parent")
+                        .put("sessionMinutes", minutes.toIntOrNull()?.coerceIn(0, 600) ?: 45)
+                    if (type == "shopping") {
+                        val items = org.json.JSONArray()
+                        shoppingRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
+                            items.put(JSONObject().put("title", line))
+                        }
+                        body.put("shoppingItems", items)
+                    }
+                    if (type == "cooking" && recipeId != null) {
+                        body.put("recipeId", recipeId)
+                    }
+                    scope.launch {
+                        val result = runCatching {
+                            api().post("/api/guard/children/${'$'}{child.id}/quests", body)
+                        }
+                        status = result.fold({ "Задание создано" }, { "Ошибка: ${'$'}{it.message}" })
+                        if (result.isSuccess) {
+                            open = false
+                            title = ""
+                            shoppingRaw = ""
+                            onDone()
+                        }
+                    }
+                },
+                enabled = title.isNotBlank(),
+            ) { Text("Создать") }
+        },
+        dismissButton = { TextButton(onClick = { open = false }) { Text("Отмена") } },
+    )
 }
 
 @Composable

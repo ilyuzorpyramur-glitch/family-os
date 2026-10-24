@@ -127,6 +127,42 @@ CREATE TABLE IF NOT EXISTS recipe_items (
 
 CREATE INDEX IF NOT EXISTS idx_recipe_items_recipe ON recipe_items(recipe_id);
 
+CREATE TABLE IF NOT EXISTS quest_shopping_items (
+  id         TEXT PRIMARY KEY,
+  quest_id   TEXT NOT NULL REFERENCES quests(id) ON DELETE CASCADE,
+  title      TEXT NOT NULL,
+  barcode    TEXT,
+  checked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_shopping_quest ON quest_shopping_items(quest_id);
+
+CREATE TABLE IF NOT EXISTS quest_sessions (
+  id         TEXT PRIMARY KEY,
+  quest_id   TEXT NOT NULL,
+  child_id   TEXT NOT NULL,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  ends_at    TEXT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'active'
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_child ON quest_sessions(child_id, status);
+
+CREATE TABLE IF NOT EXISTS site_visits (
+  id       TEXT PRIMARY KEY,
+  child_id TEXT NOT NULL,
+  domain   TEXT NOT NULL,
+  at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_visits ON site_visits(child_id, at DESC);
+
+CREATE TABLE IF NOT EXISTS blocked_sites (
+  domain     TEXT PRIMARY KEY,
+  reason     TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS crash_reports (
   id         TEXT PRIMARY KEY,
   child_id   TEXT,
@@ -401,6 +437,9 @@ export function openDb(file: string): DB {
   addColumn(db, "events", "description", "description TEXT");
   addColumn(db, "events", "lat", "lat REAL");
   addColumn(db, "events", "lng", "lng REAL");
+  addColumn(db, "quests", "quest_type", "quest_type TEXT NOT NULL DEFAULT 'task'");
+  addColumn(db, "quests", "recipe_id", "recipe_id TEXT");
+  addColumn(db, "quests", "session_minutes", "session_minutes INTEGER NOT NULL DEFAULT 0");
   return db;
 }
 

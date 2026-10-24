@@ -44,6 +44,8 @@ data class QuestItem(
     val approval: String,
     val photosRequired: Int,
     val photos: List<String>,
+    val questType: String,
+    val sessionMinutes: Int,
 ) {
     companion object {
         fun fromJson(o: JSONObject): QuestItem = QuestItem(
@@ -58,6 +60,8 @@ data class QuestItem(
             shared = o.optInt("shared", 0) == 1,
             approval = o.optString("approval", "parent"),
             photosRequired = o.optInt("photos_required", 0),
+            questType = o.optString("quest_type", "task"),
+            sessionMinutes = o.optInt("session_minutes", 0),
             photos = o.optJSONArray("photos")?.let { arr ->
                 (0 until arr.length()).mapNotNull { index ->
                     arr.optJSONObject(index)?.optString("url")?.ifBlank { null }
