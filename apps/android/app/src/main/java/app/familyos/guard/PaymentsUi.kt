@@ -177,8 +177,13 @@ fun PayByQrCard(
     onOpen: () -> Unit,
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = app.familyos.guard.ui.accentSoft),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                androidx.compose.foundation.BorderStroke(1.dp, app.familyos.guard.ui.accent.copy(alpha = 0.35f)),
+                androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+            ),
     ) {
         Row(
             Modifier.fillMaxWidth().padding(14.dp),

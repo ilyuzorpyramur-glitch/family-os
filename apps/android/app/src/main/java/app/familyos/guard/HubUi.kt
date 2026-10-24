@@ -1,5 +1,6 @@
 package app.familyos.guard
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -100,8 +101,12 @@ fun HomeScreen(
         }
 
         Card(
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            modifier = Modifier.border(
+                BorderStroke(1.dp, app.familyos.guard.ui.accent.copy(alpha = 0.28f)),
+                RoundedCornerShape(24.dp),
+            ),
         ) {
             Column(
                 modifier = Modifier
@@ -307,14 +312,19 @@ fun HomeScreen(
 @Composable
 private fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
     Card(
-        modifier = modifier,
+        modifier = modifier.border(BorderStroke(1.dp, Color(0x14FFFFFF)), RoundedCornerShape(20.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(12.dp)) {
+        Column(Modifier.padding(14.dp)) {
             Text(title, color = Muted, fontSize = 11.sp)
-            Spacer(Modifier.height(4.dp))
-            Text(value, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                value,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold,
+                color = app.familyos.guard.ui.accent,
+            )
         }
     }
 }
