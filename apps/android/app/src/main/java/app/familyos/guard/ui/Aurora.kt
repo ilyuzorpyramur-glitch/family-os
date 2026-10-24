@@ -25,34 +25,34 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable () -> U
             // Верхнее левое пятно — основной акцент.
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(accent.copy(alpha = 0.52f), Color.Transparent),
-                    center = Offset(w * 0.10f, h * 0.02f),
-                    radius = w * 0.95f,
+                    colors = listOf(accent.copy(alpha = 0.42f), Color.Transparent),
+                    center = Offset(-w * 0.06f, -h * 0.02f),
+                    radius = w * 0.72f,
                 ),
-                radius = w * 0.95f,
-                center = Offset(w * 0.10f, h * 0.02f),
+                radius = w * 0.72f,
+                center = Offset(-w * 0.06f, -h * 0.02f),
             )
 
             // Верхнее правое — второй акцент, даёт перелив.
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(accent2.copy(alpha = 0.30f), Color.Transparent),
-                    center = Offset(w * 1.02f, h * 0.14f),
-                    radius = w * 0.78f,
+                    colors = listOf(accent2.copy(alpha = 0.22f), Color.Transparent),
+                    center = Offset(w * 1.04f, h * 0.02f),
+                    radius = w * 0.60f,
                 ),
-                radius = w * 0.78f,
-                center = Offset(w * 1.02f, h * 0.14f),
+                radius = w * 0.60f,
+                center = Offset(w * 1.04f, h * 0.02f),
             )
 
             // Нижнее свечение — глубина под контентом.
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(accent.copy(alpha = 0.22f), Color.Transparent),
-                    center = Offset(w * 0.5f, h * 1.05f),
-                    radius = w * 1.1f,
+                    center = Offset(w * 0.5f, h * 1.12f),
+                    radius = w * 0.95f,
                 ),
-                radius = w * 1.1f,
-                center = Offset(w * 0.5f, h * 1.05f),
+                radius = w * 0.95f,
+                center = Offset(w * 0.5f, h * 1.12f),
             )
 
             // Среднее пятно — перелив по центру.

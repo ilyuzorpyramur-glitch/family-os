@@ -127,7 +127,7 @@ fun ChildrenTab(
             .verticalScroll(rememberScrollState())
             .statusBarsPadding()
             .padding(horizontal = 16.dp)
-            .padding(top = 18.dp, bottom = 24.dp),
+            .padding(top = 18.dp, bottom = 110.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -300,7 +300,7 @@ private fun OnlineBadge(online: Boolean) {
 
 /** Кольцо калорий: 270° дуги, как в макете. */
 @Composable
-fun CalorieRing(consumed: Int, target: Int, diameter: Dp = 152.dp, thickness: Dp = 12.dp) {
+fun CalorieRing(consumed: Int, target: Int, diameter: Dp = 136.dp, thickness: Dp = 11.dp) {
     val ratio = if (target > 0) (consumed.toFloat() / target).coerceIn(0f, 1f) else 0f
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(diameter)) {
         Canvas(Modifier.fillMaxSize()) {
