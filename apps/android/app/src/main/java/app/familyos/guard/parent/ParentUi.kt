@@ -60,6 +60,7 @@ private val PRed = Color(0xFFF87171)
 fun ParentApp(
     initialUrl: String,
     initialToken: String,
+    cache: app.familyos.guard.data.OfflineStore,
     onExit: () -> Unit,
     onTokenSaved: (String) -> Unit = {},
 ) {
@@ -78,19 +79,37 @@ fun ParentApp(
 
     fun api() = ParentApi(baseUrl, token)
 
-    suspend fun loadAll() {
-        val client = api()
+    fun applyBootstrap(data: JSONObject) {
         runCatching {
-            val overview = client.get("/api/guard/overview")
-            publicUrl = baseUrl
-            children = ChildCard.listFromOverview(overview, baseUrl)
+            data.optJSONObject("overview")?.let { overview ->
+                publicUrl = baseUrl
+                children = ChildCard.listFromOverview(JSONObject().put("data", overview), baseUrl)
+            }
         }
         runCatching {
-            events = PendingEvent.listFrom(client.get("/api/guard/child-events?status=pending"))
+            data.optJSONArray("events")?.let { array ->
+                events = PendingEvent.listFrom(JSONObject().put("data", array))
+            }
         }
         runCatching {
-            money = MoneyOverview.fromJson(client.get("/api/money/overview"))
+            data.optJSONObject("money")?.let { moneyData ->
+                money = MoneyOverview.fromJson(JSONObject().put("data", moneyData))
+            }
         }
+    }
+
+    suspend fun loadAll(force: Boolean = false) {
+        val cached = cache.cached("guard_bootstrap")
+        if (cached != null) runCatching { applyBootstrap(JSONObject(cached)) }
+        if (!force && cached != null && cache.cacheFresh("guard_bootstrap", 5 * 60_000L)) return
+
+        runCatching { api().bootstrap() }
+            .onSuccess { data ->
+                cache.cache("guard_bootstrap", data.toString())
+                applyBootstrap(data)
+                error = null
+            }
+            .onFailure { if (cached == null) error = it.message }
     }
 
     if (!loggedIn) {

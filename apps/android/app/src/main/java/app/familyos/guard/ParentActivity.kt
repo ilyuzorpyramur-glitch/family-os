@@ -10,6 +10,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import app.familyos.guard.data.GuardStore
+import app.familyos.guard.data.OfflineStore
 import app.familyos.guard.parent.ParentApp
 
 class ParentActivity : ComponentActivity() {
@@ -17,6 +18,7 @@ class ParentActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val store = GuardStore(this)
+        val cache = OfflineStore(this)
 
         setContent {
             MaterialTheme(
@@ -32,6 +34,7 @@ class ParentActivity : ComponentActivity() {
                     ParentApp(
                         initialUrl = store.serverUrl.ifBlank { "https://herb-rosa-moscow-checking.trycloudflare.com" },
                         initialToken = store.parentToken,
+                        cache = cache,
                         onExit = { finish() },
                         onTokenSaved = { store.parentToken = it },
                     )

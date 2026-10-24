@@ -11,6 +11,8 @@ import java.net.URL
 /** Клиент родительской панели: работает по admin-токену. */
 class ParentApi(var baseUrl: String, var token: String) {
 
+    suspend fun bootstrap(): JSONObject = get("/api/guard/bootstrap").optJSONObject("data") ?: JSONObject()
+
     suspend fun get(path: String): JSONObject = withContext(Dispatchers.IO) { call("GET", path, null) }
 
     suspend fun post(path: String, body: JSONObject? = null): JSONObject =

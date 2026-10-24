@@ -318,6 +318,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // при возврате в приложение не дёргаем сервер, если кэш свежий
+        if (::offline.isInitialized) refresh(force = false)
         if (::store.isInitialized) refresh()
     }
 
@@ -337,7 +339,7 @@ class MainActivity : ComponentActivity() {
         message = "Настройки удалены"
     }
 
-    private fun refresh() {
+    private fun refresh(force: Boolean = true) {
         val configured = store.isConfigured
         state = state.copy(
             configured = configured,
@@ -353,36 +355,70 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             busy = true
             val api = ApiClient(store)
-            runCatching { api.refreshPolicy() }
-                .onSuccess { state = state.copy(policy = it) }
-                .onFailure { message = it.message }
-            runCatching { api.quests() }.onSuccess {
-                quests = it
-                offline.cache("quests", org.json.JSONObject().put("data", org.json.JSONObject()).toString())
+
+            val cached = offline.cached("bootstrap")
+            if (cached != null) runCatching { applyBootstrap(org.json.JSONObject(cached)) }
+
+            val fresh = offline.cacheFresh("bootstrap", 5 * 60_000L)
+            if (!force && fresh && cached != null) {
+                busy = false
+                startTracking()
+                return@launch
             }
-            runCatching { api.shop() }.onSuccess { shop = it }
-            runCatching { api.home() }.onSuccess { next ->
-                val previous = lastLevel
-                if (previous != null && next.level > previous) levelUpLevel = next.level
-                lastLevel = next.level
-                home = next
-            }.onFailure {
-                message = "Нет связи с сервером — показаны последние данные"
-            }
-            runCatching { api.profile() }.onSuccess { profile = it }
-            runCatching { api.calendar(YearMonth.now().toString()) }.onSuccess { calendar = it }
-            runCatching { api.siteRules() }.onSuccess { store.vpnRules = it.toString() }
-            runCatching { api.policySession() }.onSuccess {
-                session = it
-                store.sessionActive = it != null
-            }
-            runCatching { api.recipes() }.onSuccess { recipes = it }
-            runCatching { api.products() }.onSuccess { products = it }
+
+            runCatching { api.bootstrap() }
+                .onSuccess { data ->
+                    offline.cache("bootstrap", data.toString())
+                    applyBootstrap(data)
+                    message = null
+                }
+                .onFailure {
+                    if (cached == null) message = "Нет связи с сервером"
+                }
+
             flushOutbox(api)
             reportPendingCrash()
             busy = false
             startTracking()
         }
+    }
+
+    /** Один сетевой ответ разбираем во все экраны. */
+    private fun applyBootstrap(data: org.json.JSONObject) {
+        data.optJSONObject("policy")?.let { root ->
+            runCatching {
+                state = state.copy(policy = Policy.fromJson(root.toString()))
+                root.optJSONObject("policy")?.let { store.savePolicyBody(it.toString()) }
+                val active = root.optJSONObject("session")
+                session = active
+                store.sessionActive = active != null
+            }
+        }
+        data.optJSONObject("home")?.let { root ->
+            runCatching {
+                val model = HomeData.fromJson(org.json.JSONObject().put("data", root))
+                val previous = lastLevel
+                if (previous != null && model.level > previous) levelUpLevel = model.level
+                lastLevel = model.level
+                home = model
+            }
+        }
+        data.optJSONObject("quests")?.let { root ->
+            if (root.length() > 0) runCatching { quests = QuestData.fromJson(org.json.JSONObject().put("data", root)) }
+        }
+        data.optJSONObject("shop")?.let { root ->
+            if (root.length() > 0) runCatching { shop = ShopData.fromJson(org.json.JSONObject().put("data", root)) }
+        }
+        data.optJSONObject("calendar")?.let { root ->
+            runCatching { calendar = CalendarData.fromJson(org.json.JSONObject().put("data", root)) }
+        }
+        data.optJSONArray("recipes")?.let { array ->
+            runCatching { recipes = Recipe.listFrom(org.json.JSONObject().put("data", array)) }
+        }
+        data.optJSONArray("products")?.let { array ->
+            runCatching { products = Product.listFrom(org.json.JSONObject().put("data", array)) }
+        }
+        data.optJSONObject("sites")?.let { store.vpnRules = it.toString() }
     }
 
     private fun askForTime() {

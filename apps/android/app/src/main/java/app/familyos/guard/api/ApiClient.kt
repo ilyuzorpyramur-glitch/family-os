@@ -114,6 +114,10 @@ class ApiClient(private val store: GuardStore) {
         Unit
     }
 
+    suspend fun bootstrap(): JSONObject = withContext(Dispatchers.IO) {
+        call("GET", "/api/device/bootstrap", null).optJSONObject("data") ?: JSONObject()
+    }
+
     suspend fun home(): HomeData = withContext(Dispatchers.IO) {
         HomeData.fromJson(call("GET", "/api/device/home", null))
     }
