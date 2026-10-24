@@ -199,9 +199,9 @@ fun HomeScreen(
         PayByQrCard(pendingCount = pendingPayments, onOpen = onPayByQr)
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricCard("Задания", "${home?.approvedToday ?: 0} сегодня", Modifier.weight(1f))
-            MetricCard("Экран", minutesText(home?.screenMinutes ?: 0), Modifier.weight(1f))
-            MetricCard("Стрик", "${home?.streak ?: 0} дн.", Modifier.weight(1f))
+            MetricCard("Задания", "${home?.approvedToday ?: 0}", Modifier.weight(1f), hint = "сегодня")
+            MetricCard("Экран", minutesText(home?.screenMinutes ?: 0), Modifier.weight(1f), hint = "за день")
+            MetricCard("Стрик", "${home?.streak ?: 0}", Modifier.weight(1f), hint = "дней")
         }
 
         val dayInfo = calendar?.days?.firstOrNull { it.date == selectedDate }
@@ -311,21 +311,31 @@ fun HomeScreen(
 }
 
 @Composable
-private fun MetricCard(title: String, value: String, modifier: Modifier = Modifier) {
+private fun MetricCard(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+) {
     Card(
         modifier = modifier.border(BorderStroke(1.dp, Color(0x14FFFFFF)), RoundedCornerShape(20.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(20.dp),
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Text(title, color = Muted, fontSize = 11.sp)
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
+            Text(title, color = Muted, fontSize = 10.sp, maxLines = 1)
             Spacer(Modifier.height(6.dp))
             Text(
                 value,
-                fontSize = 19.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = app.familyos.guard.ui.accent,
+                maxLines = 1,
+                softWrap = false,
             )
+            hint?.let {
+                Text(it, color = Muted, fontSize = 10.sp, maxLines = 1)
+            }
         }
     }
 }
