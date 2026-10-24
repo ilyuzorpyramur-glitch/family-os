@@ -1,5 +1,6 @@
 package app.familyos.guard.parent
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -116,12 +117,16 @@ fun SitesRulesDialog(api: () -> ParentApi, onDismiss: () -> Unit) {
                 block.forEach { item ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(item, fontSize = 11.sp, color = SetRed)
-                        Text(
-                            "убрать",
-                            fontSize = 11.sp,
-                            color = SetMuted,
-                            modifier = Modifier.padding(start = 8.dp),
-                        )
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        api().delete("/api/guard/sites/rules/" + java.net.URLEncoder.encode(item, "UTF-8"))
+                                    }.onSuccess { status = "Убрано: $item" }.onFailure { status = it.message }
+                                    reload()
+                                }
+                            },
+                        ) { Text("убрать", fontSize = 11.sp) }
                     }
                 }
                 if (block.isEmpty()) Text("Пусто — работает только встроенный фильтр 18+", fontSize = 10.sp, color = SetMuted)
@@ -235,21 +240,24 @@ fun RecipeDialog(
                 products.take(12).forEach { product ->
                     val checked = selected.contains(product.id)
                     Row(
-                        Modifier.fillMaxWidth(),
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selected = if (checked) selected - product.id else selected + product.id
+                            }
+                            .padding(vertical = 4.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             (if (checked) "✓ " else "• ") + product.title,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = if (checked) SetAccent else SetMuted,
                         )
                         Text(
-                            "выбрать",
+                            if (checked) "убрать" else "добавить",
                             fontSize = 11.sp,
-                            color = SetAccent,
-                            modifier = Modifier
-                                .padding(start = 8.dp),
+                            color = if (checked) SetMuted else SetAccent,
                         )
                     }
                 }
