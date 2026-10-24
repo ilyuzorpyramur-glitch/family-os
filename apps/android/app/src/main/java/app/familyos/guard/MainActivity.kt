@@ -931,6 +931,11 @@ private fun Dashboard(
                 if (!state.usageAccess) PermissionRow("Статистика использования", false, onUsageSettings)
                 if (!state.accessibility) PermissionRow("Специальные возможности (блокировка)", false, onAccessibilitySettings)
                 if (!state.deviceOwner) PermissionRow("Device Owner (защита от удаления)", false, onAdmin)
+                PermissionRow(
+                    "Фильтр нежелательных сайтов",
+                    granted = store.vpnWanted,
+                    onOpen = onSiteFilter,
+                )
                 if (state.usageAccess && state.accessibility && state.deviceOwner) {
                     Text("Все доступы выданы", color = Color(0xFF34D399), fontWeight = FontWeight.SemiBold)
                 }
