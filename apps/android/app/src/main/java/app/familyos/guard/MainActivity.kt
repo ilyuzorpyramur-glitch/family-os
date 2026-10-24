@@ -360,7 +360,9 @@ class MainActivity : ComponentActivity() {
             if (cached != null) runCatching { applyBootstrap(org.json.JSONObject(cached)) }
 
             val fresh = offline.cacheFresh("bootstrap", 5 * 60_000L)
-            if (!force && fresh && cached != null) {
+            // пока идёт блокировка — проверяем сервер чаще, чтобы снять её вовремя
+            val blockedNow = store.sessionActive
+            if (!force && !blockedNow && fresh && cached != null) {
                 busy = false
                 startTracking()
                 return@launch
@@ -389,7 +391,13 @@ class MainActivity : ComponentActivity() {
             runCatching {
                 state = state.copy(policy = Policy.fromJson(root.toString()))
                 root.optJSONObject("policy")?.let { store.savePolicyBody(it.toString()) }
-                val active = root.optJSONObject("session")
+                var active = root.optJSONObject("session")
+                // блокировка не должна висеть из старого кэша, если окно уже прошло
+                if (active != null) {
+                    val end = active.optString("endsAt")
+                    val ended = runCatching { java.time.Instant.parse(end).isBefore(java.time.Instant.now()) }.getOrDefault(false)
+                    if (ended) active = null
+                }
                 session = active
                 store.sessionActive = active != null
             }
