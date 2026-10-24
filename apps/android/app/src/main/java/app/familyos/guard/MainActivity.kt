@@ -210,6 +210,7 @@ class MainActivity : ComponentActivity() {
                                 } else when (tab) {
                                     0 -> HomeScreen(
                                         home = home,
+                                        nutrition = nutrition,
                                         busy = busy,
                                         message = message,
                                         onRefresh = { refresh() },

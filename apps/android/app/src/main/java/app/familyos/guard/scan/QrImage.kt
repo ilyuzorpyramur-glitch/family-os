@@ -43,7 +43,7 @@ fun QrImage(text: String, size: Int = 220) {
         Modifier
             .size(size.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White),
+            .background(androidx.compose.ui.graphics.Color.White),
         contentAlignment = Alignment.Center,
     ) {
         bitmap?.let {
