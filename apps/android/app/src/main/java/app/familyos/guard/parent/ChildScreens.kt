@@ -86,6 +86,7 @@ fun ChildrenTab(
     onOpen: (ChildCard) -> Unit,
     onLimit: (ChildCard) -> Unit,
     onCreate: (String) -> Unit,
+    onRefresh: () -> Unit,
 ) {
     var adding by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
@@ -143,7 +144,8 @@ fun ChildrenTab(
                     .size(42.dp)
                     .clip(CircleShape)
                     .background(Surface1)
-                    .border(1.dp, Line, CircleShape),
+                    .border(1.dp, Line, CircleShape)
+                    .clickable { onRefresh() },
                 contentAlignment = Alignment.Center,
             ) { Text("👻", fontSize = 18.sp) }
         }

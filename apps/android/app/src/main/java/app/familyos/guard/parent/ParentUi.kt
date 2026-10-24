@@ -1240,6 +1240,12 @@ private fun ParentChildrenScreen(
                     onRefresh()
                 }
             },
+            onRefresh = {
+                scope.launch {
+                    reloadFacts()
+                    onRefresh()
+                }
+            },
         )
         localError?.let { message ->
             Row(
