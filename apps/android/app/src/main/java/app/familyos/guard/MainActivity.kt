@@ -191,7 +191,10 @@ class MainActivity : ComponentActivity() {
                                 if (active != null) {
                                     SessionBlockScreen(
                                         title = active.optString("title", "Задание"),
-                                        endsAt = active.optString("endsAt").substringAfter('T').take(5),
+                                        endsAt = active.optString("endsAt").let { raw ->
+                                            val part = if (raw.contains('T')) raw.substringAfter('T') else raw.substringAfter(' ')
+                                            part.take(5).ifBlank { "конца задания" }
+                                        },
                                         onFinish = { finishSessionNow(active.optString("questId")) },
                                     )
                                 } else when (tab) {
