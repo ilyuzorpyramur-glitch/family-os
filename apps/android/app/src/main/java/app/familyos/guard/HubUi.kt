@@ -146,6 +146,40 @@ fun HomeScreen(
             }
         }
 
+        nutrition?.let { day ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Калории", fontWeight = FontWeight.SemiBold, color = Color(0xFFE6EDF3))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "${day.consumed} из ${day.target} ккал",
+                                color = if (day.over) Color(0xFFF87171) else Color(0xFF34D399),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                            )
+                            TextButton(onClick = { showMeal = true }) { Text("+ Еда", fontSize = 12.sp) }
+                        }
+                    }
+                    LinearProgressIndicator(
+                        progress = { (day.percent.coerceIn(0, 100)) / 100f },
+                        modifier = Modifier.fillMaxWidth().height(8.dp),
+                        color = if (day.over) Color(0xFFF87171) else Color(0xFF34D399),
+                        trackColor = Color(0xFF1F2A37),
+                    )
+                    Text(
+                        if (day.over) "Выше нормы на ${day.consumed - day.target} ккал" else "Осталось ${day.left} ккал",
+                        fontSize = 11.sp,
+                        color = Muted,
+                    )
+                }
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Задания", "${home?.approvedToday ?: 0} сегодня", Modifier.weight(1f))
             MetricCard("Экран", minutesText(home?.screenMinutes ?: 0), Modifier.weight(1f))
