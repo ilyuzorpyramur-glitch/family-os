@@ -66,7 +66,8 @@ class LockActivity : ComponentActivity() {
                     onSurface = Color(0xFFE6EDF3),
                 ),
             ) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(Modifier.fillMaxSize(), color = Color.Transparent) {
+                    app.familyos.guard.ui.AuroraBackground()
                     val reason = policy?.blockReasonAt()
                     Column(
                         modifier = Modifier

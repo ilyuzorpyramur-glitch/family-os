@@ -202,7 +202,8 @@ class MainActivity : ComponentActivity() {
                 ),
                 shapes = app.familyos.guard.ui.AppShapes,
             ) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(Modifier.fillMaxSize(), color = Color.Transparent) {
+                    app.familyos.guard.ui.AuroraBackground()
                     if (state.configured) {
                         Column(Modifier.fillMaxSize().statusBarsPadding()) {
                             Box(Modifier.weight(1f)) {

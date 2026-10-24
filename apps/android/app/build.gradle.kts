@@ -26,6 +26,7 @@ android {
             buildConfigField("String", "ROLE", "\"child\"")
             buildConfigField("String", "ACCENT", "\"#3B82F6\"")
             buildConfigField("String", "ACCENT_DARK", "\"#12203C\"")
+            buildConfigField("String", "ACCENT_2", "\"#22D3EE\"")
         }
         create("parent") {
             dimension = "role"
@@ -34,6 +35,7 @@ android {
             buildConfigField("String", "ROLE", "\"parent\"")
             buildConfigField("String", "ACCENT", "\"#F97316\"")
             buildConfigField("String", "ACCENT_DARK", "\"#34180A\"")
+            buildConfigField("String", "ACCENT_2", "\"#FB7185\"")
         }
     }
 

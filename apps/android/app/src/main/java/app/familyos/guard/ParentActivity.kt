@@ -36,7 +36,8 @@ class ParentActivity : ComponentActivity() {
                 ),
                 shapes = app.familyos.guard.ui.AppShapes,
             ) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Surface(Modifier.fillMaxSize(), color = Color.Transparent) {
+                    app.familyos.guard.ui.AuroraBackground()
                     ParentApp(
                         initialUrl = store.serverUrl.ifBlank { "https://herb-rosa-moscow-checking.trycloudflare.com" },
                         initialToken = store.parentToken,

@@ -300,7 +300,7 @@ private fun OnlineBadge(online: Boolean) {
 
 /** Кольцо калорий: 270° дуги, как в макете. */
 @Composable
-fun CalorieRing(consumed: Int, target: Int, diameter: Dp = 168.dp, thickness: Dp = 13.dp) {
+fun CalorieRing(consumed: Int, target: Int, diameter: Dp = 152.dp, thickness: Dp = 12.dp) {
     val ratio = if (target > 0) (consumed.toFloat() / target).coerceIn(0f, 1f) else 0f
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(diameter)) {
         Canvas(Modifier.fillMaxSize()) {

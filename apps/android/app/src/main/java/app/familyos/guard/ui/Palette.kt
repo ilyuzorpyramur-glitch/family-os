@@ -16,16 +16,23 @@ val accent: Color = hex(BuildConfig.ACCENT)
 /** Тёмный оттенок акцента — для мягких подложек и градиентов. */
 val accentDeep: Color = hex(BuildConfig.ACCENT_DARK)
 
+/** Второй акцент — для «сияния» на фоне и подсветки. */
+val accent2: Color = runCatching {
+    Color(android.graphics.Color.parseColor(BuildConfig.ACCENT_2))
+}.getOrDefault(Color(0xFF22D3EE))
+
 /** Полупрозрачная подложка под активный элемент. */
 val accentSoft: Color = accent.copy(alpha = 0.18f)
 
 /** Мягкая заливка карточки-акцента. */
 val accentCard: Color = accentDeep.copy(alpha = 0.55f)
 
-val bg: Color = Color(0xFF0A0C11)
-val cardBg: Color = Color(0xFF12151C)
-val cardBgAlt: Color = Color(0xFF161A22)
-val cardBorder: Color = Color(0xFF1F242E)
+val bg: Color = Color(0xFF080A0F)
+
+/** Карточки полупрозрачные: сквозь них видно сияние фона. */
+val cardBg: Color = Color(0xF213161E)
+val cardBgAlt: Color = Color(0xE81A1E28)
+val cardBorder: Color = Color(0x24FFFFFF)
 val textPrimary: Color = Color(0xFFE9EEF5)
 val textMuted: Color = Color(0xFF8B94A6)
 val danger: Color = Color(0xFFF87171)

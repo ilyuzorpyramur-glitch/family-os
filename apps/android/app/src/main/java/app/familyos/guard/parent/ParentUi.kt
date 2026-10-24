@@ -305,7 +305,7 @@ fun ParentApp(
             }
         }
         Row(
-            Modifier.fillMaxWidth().background(Color(0xFF0E141C)).padding(horizontal = 8.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().background(Color(0xE60E1219)).padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
             PTab("Обзор", Icons.Filled.Home, tab == 1) { tab = 1 }

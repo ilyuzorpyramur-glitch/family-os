@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
-private val BarBg = Color(0xFF0D1016)
+private val BarBg = Color(0xE60D1016)
 private val BarMuted = app.familyos.guard.ui.textMuted
 
 private data class BarItem(val label: String, val icon: ImageVector)
