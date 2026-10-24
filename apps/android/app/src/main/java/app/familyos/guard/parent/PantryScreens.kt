@@ -58,6 +58,7 @@ fun ParentPantryScreen(
     var status by remember { mutableStateOf<String?>(null) }
     var shopping by remember { mutableStateOf(false) }
     var usage by remember { mutableStateOf(false) }
+    var recipe by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     suspend fun reload() {
@@ -81,7 +82,10 @@ fun ParentPantryScreen(
             }
             status?.let { Text(it, color = PntAccent, fontSize = 12.sp) }
 
-            Text("На складе: ${products.size}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("На складе: ${products.size}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { recipe = true }) { Text("Новый рецепт") }
+            }
             products.forEach { product ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Row(
@@ -139,6 +143,14 @@ fun ParentPantryScreen(
             api = api,
             onDismiss = { shopping = false },
             onChanged = { status = it; scope.launch { reload() } },
+        )
+    }
+    if (recipe) {
+        RecipeDialog(
+            api = api,
+            products = products,
+            onDismiss = { recipe = false },
+            onSaved = { scope.launch { reload() } },
         )
     }
     if (usage) {

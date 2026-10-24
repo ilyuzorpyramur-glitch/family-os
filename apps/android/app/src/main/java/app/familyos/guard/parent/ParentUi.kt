@@ -213,6 +213,7 @@ fun ParentApp(
                 else -> ParentChildrenScreen(
                     children = children,
                     busy = busy,
+                    api = { api() },
                     onSave = { id, nickname, school, grade ->
                         scope.launch {
                             busy = true
@@ -326,6 +327,7 @@ private fun ParentOverview(
     api: () -> ParentApi,
     onRefresh: () -> Unit,
 ) {
+    var sitesOpen by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -334,7 +336,15 @@ private fun ParentOverview(
             Text("Обзор", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
         }
-        ParentQuestCreator(children = children, api = { api() }, onDone = onRefresh)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.weight(1f)) {
+                ParentQuestCreator(children = children, api = { api() }, onDone = onRefresh)
+            }
+            TextButton(onClick = { sitesOpen = true }) { Text("Сайты") }
+        }
+        if (sitesOpen) {
+            SitesRulesDialog(api = { api() }, onDismiss = { sitesOpen = false })
+        }
 
         if (pendingEvents > 0) {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF2A2308))) {
@@ -925,7 +935,9 @@ private fun ParentChildrenScreen(
     busy: Boolean,
     onSave: (String, String, String, String) -> Unit,
     onRefresh: () -> Unit,
+    api: () -> ParentApi,
 ) {
+    var policyChild by remember { mutableStateOf<ChildCard?>(null) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -933,6 +945,18 @@ private fun ParentChildrenScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("Дети", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
+        }
+        policyChild?.let { child ->
+            PolicyDialog(
+                childId = child.id,
+                childName = child.nickname ?: child.name,
+                limitMinutes = child.limitMinutes,
+                bedtimeStart = "21:00",
+                bedtimeEnd = "07:00",
+                api = api,
+                onDismiss = { policyChild = null },
+                onSaved = onRefresh,
+            )
         }
         children.forEach { child ->
             var nickname by remember(child.id, child.nickname) { mutableStateOf(child.nickname.orEmpty()) }
@@ -944,8 +968,11 @@ private fun ParentChildrenScreen(
                     OutlinedTextField(nickname, { nickname = it }, label = { Text("Никнейм") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(school, { school = it }, label = { Text("Школа") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(grade, { grade = it }, label = { Text("Класс") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Button(onClick = { onSave(child.id, nickname, school, grade) }, enabled = !busy) {
-                        Text("Сохранить")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { onSave(child.id, nickname, school, grade) }, enabled = !busy) {
+                            Text("Сохранить")
+                        }
+                        TextButton(onClick = { policyChild = child }) { Text("Лимит и режим") }
                     }
                 }
             }
