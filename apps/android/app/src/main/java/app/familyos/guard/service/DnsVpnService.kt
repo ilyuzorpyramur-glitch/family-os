@@ -77,12 +77,13 @@ class DnsVpnService : VpnService() {
         val descriptor = runCatching {
             Builder()
                 .setSession("Family OS · фильтр сайтов")
-                .addAddress("10.111.222.1", 32)
+                .addAddress("10.111.222.1", 24)
                 .addDnsServer("10.111.222.2")
                 .addRoute("10.111.222.2", 32)
                 .setBlocking(false)
                 .establish()
         }.getOrNull() ?: run {
+            store.vpnWanted = false
             stopSelf()
             return
         }
