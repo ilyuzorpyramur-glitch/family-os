@@ -320,7 +320,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // при возврате в приложение не дёргаем сервер, если кэш свежий
         if (::offline.isInitialized) refresh(force = false)
-        if (::store.isInitialized) refresh()
+        if (::store.isInitialized) refresh(force = false)
     }
 
     private fun saveConfig(url: String, key: String) {
