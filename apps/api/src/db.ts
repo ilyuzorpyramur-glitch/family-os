@@ -359,6 +359,21 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_child_date ON events(child_id, date);
 
+CREATE TABLE IF NOT EXISTS payment_requests (
+  id         TEXT PRIMARY KEY,
+  child_id   TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  amount     REAL NOT NULL DEFAULT 0,
+  purpose    TEXT,
+  qr_payload TEXT NOT NULL,
+  merchant   TEXT,
+  status     TEXT NOT NULL DEFAULT 'pending',
+  note       TEXT,
+  decided_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_payments_child ON payment_requests(child_id, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS quest_photos (
   id         TEXT PRIMARY KEY,
   quest_id   TEXT NOT NULL REFERENCES quests(id) ON DELETE CASCADE,
@@ -467,6 +482,8 @@ export function openDb(file: string): DB {
   addColumn(db, "quests", "session_end", "session_end TEXT");
   addColumn(db, "blocked_sites", "kind", "kind TEXT NOT NULL DEFAULT 'block'");
   addColumn(db, "children", "kcal_target", "kcal_target INTEGER NOT NULL DEFAULT 2000");
+  addColumn(db, "children", "pay_limit", "pay_limit INTEGER NOT NULL DEFAULT 1500");
+  addColumn(db, "children", "pay_daily_limit", "pay_daily_limit INTEGER NOT NULL DEFAULT 3000");
   return db;
 }
 

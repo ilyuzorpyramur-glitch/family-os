@@ -52,6 +52,8 @@ private val Muted = Color(0xFF8B9BB0)
 fun HomeScreen(
     home: HomeData?,
     nutrition: app.familyos.guard.data.Nutrition?,
+    pendingPayments: Int,
+    onPayByQr: () -> Unit,
     calendar: CalendarData?,
     busy: Boolean,
     message: String?,
@@ -187,6 +189,8 @@ fun HomeScreen(
                 }
             }
         }
+
+        PayByQrCard(pendingCount = pendingPayments, onOpen = onPayByQr)
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Задания", "${home?.approvedToday ?: 0} сегодня", Modifier.weight(1f))

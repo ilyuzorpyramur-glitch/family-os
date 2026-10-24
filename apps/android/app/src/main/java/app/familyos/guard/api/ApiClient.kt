@@ -130,6 +130,24 @@ class ApiClient(private val store: GuardStore) {
         call("GET", "/api/device/nutrition", null).optJSONObject("data") ?: org.json.JSONObject()
     }
 
+    suspend fun parsePayment(qrPayload: String): app.familyos.guard.data.ParsedPayment =
+        withContext(Dispatchers.IO) {
+            val root = call("POST", "/api/device/payments/parse", org.json.JSONObject().put("qrPayload", qrPayload))
+            app.familyos.guard.data.ParsedPayment.fromJson(root.optJSONObject("data"))
+        }
+
+    suspend fun createPayment(qrPayload: String, amount: Double?, purpose: String?): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = org.json.JSONObject().put("qrPayload", qrPayload)
+            amount?.let { body.put("amount", it) }
+            purpose?.takeIf { it.isNotBlank() }?.let { body.put("purpose", it) }
+            call("POST", "/api/device/payments", body)
+        }
+
+    suspend fun payments(): app.familyos.guard.data.PaymentData = withContext(Dispatchers.IO) {
+        app.familyos.guard.data.PaymentData.fromJson(call("GET", "/api/device/payments", null).optJSONObject("data"))
+    }
+
     suspend fun bootstrap(): JSONObject = withContext(Dispatchers.IO) {
         call("GET", "/api/device/bootstrap", null).optJSONObject("data") ?: JSONObject()
     }

@@ -21,6 +21,12 @@ class ParentApi(var baseUrl: String, var token: String) {
     suspend fun patch(path: String, body: JSONObject): JSONObject =
         withContext(Dispatchers.IO) { call("PATCH", path, body) }
 
+    suspend fun decidePayment(id: String, status: String, note: String? = null): JSONObject {
+        val body = JSONObject().put("status", status)
+        if (!note.isNullOrBlank()) body.put("note", note)
+        return post("/api/guard/payments/$id/decide", body)
+    }
+
     suspend fun delete(path: String): JSONObject =
         withContext(Dispatchers.IO) { call("DELETE", path, null) }
 

@@ -113,6 +113,8 @@ class MainActivity : ComponentActivity() {
     private var cookQuest by mutableStateOf<QuestItem?>(null)
     private var session by mutableStateOf<org.json.JSONObject?>(null)
     private var nutrition by mutableStateOf<app.familyos.guard.data.Nutrition?>(null)
+    private var payments by mutableStateOf<app.familyos.guard.data.PaymentData?>(null)
+    private var showPayByQr by mutableStateOf(false)
     private var recipes by mutableStateOf<List<Recipe>>(emptyList())
     private var products by mutableStateOf<List<Product>>(emptyList())
     private var levelUpLevel by mutableStateOf<Int?>(null)
@@ -217,6 +219,8 @@ class MainActivity : ComponentActivity() {
                                     0 -> HomeScreen(
                                         home = home,
                                         nutrition = nutrition,
+                                        pendingPayments = payments?.items?.count { it.isPending } ?: 0,
+                                        onPayByQr = { showPayByQr = true },
                                         busy = busy,
                                         message = message,
                                         onRefresh = { refresh() },
@@ -287,6 +291,20 @@ class MainActivity : ComponentActivity() {
                                         onPickAvatar = { avatarPicker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly)) },
                                         onSave = { nickname, school, grade -> saveProfile(nickname, school, grade) },
                                         onRefresh = { refresh() },
+                                    )
+                                }
+                                if (showPayByQr) {
+                                    PayByQrDialog(
+                                        limits = payments,
+                                        onParse = { raw -> ApiClient(store).parsePayment(raw) },
+                                        onCreate = { raw, amount, purpose ->
+                                            ApiClient(store).createPayment(raw, amount, purpose)
+                                            runCatching {
+                                                payments = ApiClient(store).payments()
+                                            }
+                                            Unit
+                                        },
+                                        onDismiss = { showPayByQr = false },
                                     )
                                 }
                                 if (showPermissions) {
@@ -499,6 +517,7 @@ class MainActivity : ComponentActivity() {
         }
         data.optJSONObject("sites")?.let { store.vpnRules = it.toString() }
         data.optJSONObject("nutrition")?.let { nutrition = app.familyos.guard.data.Nutrition.fromJson(it) }
+        data.optJSONObject("payments")?.let { payments = app.familyos.guard.data.PaymentData.fromJson(it) }
     }
 
     private fun askForTime() {

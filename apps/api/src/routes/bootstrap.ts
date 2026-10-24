@@ -51,6 +51,7 @@ export function registerBootstrapApi(app: FastifyInstance, ctx: Ctx): void {
       ["products", "/api/device/products"],
       ["sites", "/api/device/sites/blocklist"],
       ["nutrition", "/api/device/nutrition"],
+      ["payments", "/api/device/payments"],
       ["calendar", `/api/device/calendar?month=${month}`],
     ]);
     return { ok: true, data: { ...data, month, fetchedAt: new Date().toISOString() } };
@@ -70,6 +71,7 @@ export function registerBootstrapApi(app: FastifyInstance, ctx: Ctx): void {
       ["products", "/api/products"],
       ["suggest", "/api/shopping/suggest"],
       ["nutrition", "/api/guard/nutrition"],
+      ["payments", "/api/guard/payments?status=pending"],
     ]);
     return { ok: true, data: { ...data, fetchedAt: new Date().toISOString() } };
   });

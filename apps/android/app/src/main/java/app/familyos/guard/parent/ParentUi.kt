@@ -85,6 +85,7 @@ fun ParentApp(
     var children by remember { mutableStateOf<List<ChildCard>>(emptyList()) }
     var events by remember { mutableStateOf<List<PendingEvent>>(emptyList()) }
     var money by remember { mutableStateOf<MoneyOverview?>(null) }
+    var payRequests by remember { mutableStateOf<List<app.familyos.guard.data.PaymentItem>>(emptyList()) }
     var publicUrl by remember { mutableStateOf(baseUrl) }
     val scope = rememberCoroutineScope()
 
@@ -106,6 +107,9 @@ fun ParentApp(
             data.optJSONObject("money")?.let { moneyData ->
                 money = MoneyOverview.fromJson(JSONObject().put("data", moneyData))
             }
+        }
+        runCatching {
+            payRequests = app.familyos.guard.data.PaymentItem.listFrom(data.optJSONObject("payments"))
         }
     }
 
@@ -176,7 +180,13 @@ fun ParentApp(
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             when (tab) {
-                1 -> ParentOverview(children, events.size, busy, api = { api() }) {
+                1 -> ParentOverview(children, events.size, busy, payments = payRequests, api = { api() }, onDecidePayment = { id, status ->
+                    scope.launch {
+                        runCatching { api().decidePayment(id, status) }
+                            .onSuccess { loadAll(force = true) }
+                            .onFailure { error = it.message }
+                    }
+                }) {
                     scope.launch { busy = true; loadAll(); busy = false }
                 }
                 2 -> ParentMoneyScreen(
@@ -291,6 +301,59 @@ fun ParentApp(
     }
 }
 
+/** Запрос ребёнка на оплату: открыть банк и подтвердить или отклонить. */
+@Composable
+private fun PaymentRequestCard(
+    payment: app.familyos.guard.data.PaymentItem,
+    onDecide: (String, String) -> Unit,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var opened by remember(payment.id) { mutableStateOf(false) }
+    var error by remember(payment.id) { mutableStateOf<String?>(null) }
+
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(
+                    "%.0f ₽".format(payment.amount),
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PAccent,
+                )
+                Text(payment.childName ?: "ребёнок", fontSize = 11.sp, color = PMuted)
+            }
+            payment.purpose?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface) }
+            Text(payment.createdAt.replace("T", " ").take(16), fontSize = 10.sp, color = PMuted)
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(payment.qrPayload),
+                        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }
+                            .onSuccess { opened = true }
+                            .onFailure {
+                                error = "Нет приложения, которое откроет этот QR. Скопируйте код и оплатите вручную."
+                            }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text(if (opened) "Открыть снова" else "Оплатить") }
+                TextButton(onClick = { onDecide(payment.id, "declined") }) { Text("Отклонить", color = PRed) }
+            }
+            if (opened) {
+                Text("Оплатили в банке? Отметьте, чтобы ребёнок увидел.", fontSize = 11.sp, color = PMuted)
+                Button(
+                    onClick = { onDecide(payment.id, "paid") },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Оплачено") }
+            }
+            error?.let { Text(it, fontSize = 11.sp, color = PRed) }
+        }
+    }
+}
+
 @Composable
 private fun BigMetric(value: String, label: String, modifier: Modifier = Modifier) {
     Card(
@@ -395,7 +458,9 @@ private fun ParentOverview(
     children: List<ChildCard>,
     pendingEvents: Int,
     busy: Boolean,
+    payments: List<app.familyos.guard.data.PaymentItem>,
     api: () -> ParentApi,
+    onDecidePayment: (String, String) -> Unit,
     onRefresh: () -> Unit,
 ) {
     var sitesOpen by remember { mutableStateOf(false) }
@@ -417,6 +482,13 @@ private fun ParentOverview(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 BigMetric("$pendingEvents", "событий", Modifier.weight(1f))
                 BigMetric("${children.size}", "детей", Modifier.weight(1f))
+            }
+        }
+
+        if (payments.isNotEmpty()) {
+            Text("Запросы на оплату", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            payments.forEach { payment ->
+                PaymentRequestCard(payment = payment, onDecide = onDecidePayment)
             }
         }
 
