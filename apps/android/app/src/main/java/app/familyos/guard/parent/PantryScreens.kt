@@ -1,6 +1,8 @@
 package app.familyos.guard.parent
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +62,7 @@ fun ParentPantryScreen(
     var shopping by remember { mutableStateOf(false) }
     var usage by remember { mutableStateOf(false) }
     var recipe by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Product?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun reload() {
@@ -88,7 +91,13 @@ fun ParentPantryScreen(
                 TextButton(onClick = { recipe = true }) { Text("Новый рецепт") }
             }
             products.forEach { product ->
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .clickable { editing = product },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
                     Row(
                         Modifier.fillMaxWidth().padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -144,6 +153,14 @@ fun ParentPantryScreen(
             api = api,
             onDismiss = { shopping = false },
             onChanged = { status = it; scope.launch { reload() } },
+        )
+    }
+    editing?.let { product ->
+        ProductDialog(
+            product = product,
+            api = api,
+            onDismiss = { editing = null },
+            onSaved = { editing = null; scope.launch { reload(); onRefresh() } },
         )
     }
     if (recipe) {
@@ -339,5 +356,97 @@ private fun UsageModeDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Готово") } },
+    )
+}
+
+/** Карточка товара: остаток, быстрое списание и удаление. */
+@Composable
+private fun ProductDialog(
+    product: Product,
+    api: () -> ParentApi,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit,
+) {
+    var amount by remember { mutableStateOf("1") }
+    var current by remember { mutableStateOf(product.quantity) }
+    var busy by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(product.title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "%.1f %s".format(current, product.unit),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (current > 0) PntAccent else PntRed,
+                    )
+                }
+                Text("Сколько списать", fontSize = 12.sp, color = PntMuted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        amount,
+                        { amount = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                        label = { Text(product.unit) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        onClick = {
+                            val value = amount.toDoubleOrNull() ?: return@Button
+                            scope.launch {
+                                busy = true
+                                runCatching {
+                                    api().post("/api/products/${product.id}/consume", JSONObject().put("amount", value))
+                                }.onSuccess { root ->
+                                    current = root.optJSONObject("data")?.optDouble("quantity", 0.0) ?: 0.0
+                                    status = "Списано %.1f %s".format(value, product.unit)
+                                }.onFailure { status = "Ошибка: ${it.message}" }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && amount.toDoubleOrNull() != null,
+                    ) { Text("Списать") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(1.0, 0.5, 2.0).forEach { step ->
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    runCatching {
+                                        api().post("/api/products/${product.id}/consume", JSONObject().put("amount", step))
+                                    }.onSuccess { root ->
+                                        current = root.optJSONObject("data")?.optDouble("quantity", 0.0) ?: 0.0
+                                        status = "−%.1f %s".format(step, product.unit)
+                                    }.onFailure { status = "Ошибка: ${it.message}" }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy,
+                        ) { Text("−${step.toInt().let { if (step % 1.0 == 0.0) it.toString() else step.toString() }}") }
+                    }
+                }
+                status?.let { Text(it, color = PntAccent, fontSize = 11.sp) }
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            runCatching { api().delete("/api/products/${product.id}") }
+                                .onSuccess { onSaved() }
+                                .onFailure { status = "Ошибка: ${it.message}" }
+                            busy = false
+                        }
+                    },
+                    enabled = !busy,
+                ) { Text("Удалить со склада", color = PntRed) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onSaved) { Text("Готово") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }

@@ -22,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -275,11 +276,11 @@ fun ParentApp(
             Modifier.fillMaxWidth().background(Color(0xFF0E141C)).padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            PTab("Обзор", tab == 1) { tab = 1 }
-            PTab("Деньги", tab == 2) { tab = 2 }
-            PTab("События", tab == 3) { tab = 3 }
-            PTab("Склад", tab == 4) { tab = 4 }
-            PTab("Дети", tab == 0) { tab = 0 }
+            PTab("Обзор", androidx.compose.material.icons.Icons.Filled.Home, tab == 1) { tab = 1 }
+            PTab("Деньги", androidx.compose.material.icons.Icons.Filled.ShoppingCart, tab == 2) { tab = 2 }
+            PTab("События", androidx.compose.material.icons.Icons.Filled.DateRange, tab == 3) { tab = 3 }
+            PTab("Склад", androidx.compose.material.icons.Icons.Filled.List, tab == 4) { tab = 4 }
+            PTab("Дети", androidx.compose.material.icons.Icons.Filled.Person, tab == 0) { tab = 0 }
         }
     }
 }
@@ -299,15 +300,25 @@ private fun BigMetric(value: String, label: String, modifier: Modifier = Modifie
 }
 
 @Composable
-private fun PTab(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun PTab(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, onClick: () -> Unit) {
     Column(
-        Modifier.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 8.dp, vertical = 6.dp),
+        Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (selected) PAccent else PMuted,
+            modifier = Modifier.size(20.dp),
+        )
         Text(
             label,
             color = if (selected) PAccent else PMuted,
-            fontSize = 11.sp,
+            fontSize = 9.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             softWrap = false,

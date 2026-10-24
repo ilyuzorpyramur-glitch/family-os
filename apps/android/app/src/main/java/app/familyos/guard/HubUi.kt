@@ -103,7 +103,15 @@ fun HomeScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .background(Brush.linearGradient(listOf(app.familyos.guard.ui.accentDeep, Color(0xFF121922))))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                app.familyos.guard.ui.accentDeep,
+                                app.familyos.guard.ui.accent.copy(alpha = 0.10f),
+                                app.familyos.guard.ui.cardBg,
+                            ),
+                        ),
+                    )
                     .padding(18.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
