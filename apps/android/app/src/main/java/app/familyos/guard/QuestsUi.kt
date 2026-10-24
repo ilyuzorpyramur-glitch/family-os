@@ -142,7 +142,7 @@ private fun ProfileCard(profile: Profile) {
             LinearProgressIndicator(
                 progress = { profile.progress.coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth().height(8.dp),
-                color = Color(0xFF34D399),
+                color = app.familyos.guard.ui.accent,
                 trackColor = Color(0xFF1F2A37),
             )
             Spacer(Modifier.height(6.dp))
@@ -197,7 +197,7 @@ private fun QuestCard(
             Text(
                 "+${quest.xp} XP · +${quest.coins} монет" +
                     (quest.stat?.let { " · " + statLabel(it) } ?: ""),
-                color = Color(0xFF34D399),
+                color = app.familyos.guard.ui.accent,
                 fontSize = 12.sp,
             )
             Spacer(Modifier.height(10.dp))

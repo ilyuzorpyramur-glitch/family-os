@@ -24,16 +24,16 @@ android {
             applicationId = "app.familyos.guard"
             resValue("string", "app_name", "Family OS")
             buildConfigField("String", "ROLE", "\"child\"")
-            buildConfigField("String", "ACCENT", "\"#34D399\"")
-            buildConfigField("String", "ACCENT_DARK", "\"#10352A\"")
+            buildConfigField("String", "ACCENT", "\"#3B82F6\"")
+            buildConfigField("String", "ACCENT_DARK", "\"#12203C\"")
         }
         create("parent") {
             dimension = "role"
             applicationId = "app.familyos.parent"
             resValue("string", "app_name", "Family OS Parent")
             buildConfigField("String", "ROLE", "\"parent\"")
-            buildConfigField("String", "ACCENT", "\"#2DD4BF\"")
-            buildConfigField("String", "ACCENT_DARK", "\"#0E3B3A\"")
+            buildConfigField("String", "ACCENT", "\"#F97316\"")
+            buildConfigField("String", "ACCENT_DARK", "\"#34180A\"")
         }
     }
 

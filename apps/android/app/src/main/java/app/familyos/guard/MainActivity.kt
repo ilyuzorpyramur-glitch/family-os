@@ -187,12 +187,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(android.graphics.Color.parseColor(BuildConfig.ACCENT)),
-                    background = Color(0xFF0B0F14),
-                    surface = Color(0xFF121922),
-                    onSurface = Color(0xFFE6EDF3),
-                    onSurfaceVariant = Color(0xFF8B9BB0),
+                    primary = app.familyos.guard.ui.accent,
+                    onPrimary = Color(0xFF07090D),
+                    primaryContainer = app.familyos.guard.ui.accentDeep,
+                    onPrimaryContainer = app.familyos.guard.ui.textPrimary,
+                    background = app.familyos.guard.ui.bg,
+                    surface = app.familyos.guard.ui.cardBg,
+                    surfaceVariant = app.familyos.guard.ui.cardBgAlt,
+                    onSurface = app.familyos.guard.ui.textPrimary,
+                    onSurfaceVariant = app.familyos.guard.ui.textMuted,
+                    outline = app.familyos.guard.ui.cardBorder,
                 ),
+                shapes = app.familyos.guard.ui.AppShapes,
             ) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (state.configured) {
@@ -990,7 +996,7 @@ private fun Dashboard(
                 LinearProgressIndicator(
                     progress = { fraction },
                     modifier = Modifier.fillMaxWidth().height(8.dp),
-                    color = if (fraction >= 1f) Color(0xFFF87171) else Color(0xFF34D399),
+                    color = if (fraction >= 1f) Color(0xFFF87171) else app.familyos.guard.ui.accent,
                     trackColor = Color(0xFF1F2A37),
                 )
                 Spacer(Modifier.height(10.dp))
@@ -1025,7 +1031,7 @@ private fun Dashboard(
                     Text("Все доступы")
                 }
                 if (state.usageAccess && state.accessibility && state.deviceOwner) {
-                    Text("Все доступы выданы", color = Color(0xFF34D399), fontWeight = FontWeight.SemiBold)
+                    Text("Все доступы выданы", color = app.familyos.guard.ui.accent, fontWeight = FontWeight.SemiBold)
                 }
                 Text(
                     if (state.familyLink)
@@ -1090,7 +1096,7 @@ private fun PermissionRow(title: String, granted: Boolean, onOpen: () -> Unit) {
             Text(title, fontSize = 14.sp)
             Text(
                 if (granted) "включено" else "не включено",
-                color = if (granted) Color(0xFF34D399) else Color(0xFFF87171),
+                color = if (granted) app.familyos.guard.ui.accent else Color(0xFFF87171),
                 fontSize = 12.sp,
             )
         }

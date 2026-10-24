@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.sp
 import app.familyos.guard.data.Product
 import app.familyos.guard.data.Recipe
 
-private val RAccent = Color(0xFF34D399)
+private val RAccent = app.familyos.guard.ui.accent
 private val RGold = Color(0xFFFBBF24)
 private val RMuted = Color(0xFF8B9BB0)
 

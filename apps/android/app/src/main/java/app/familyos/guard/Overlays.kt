@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -45,8 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 
-private val BarBg = Color(0xFF0E141C)
-private val BarMuted = Color(0xFF6E7E92)
+private val BarBg = Color(0xFF0D1016)
+private val BarMuted = app.familyos.guard.ui.textMuted
 
 private data class BarItem(val label: String, val icon: ImageVector)
 
@@ -58,23 +59,45 @@ private val barItems = listOf(
     BarItem("Профиль", Icons.Filled.Person),
 )
 
+/**
+ * Нижняя панель как в референсе: четыре тихих пункта и поднятая
+ * круглая кнопка по центру — на неё приходится главное действие.
+ */
 @Composable
 fun BottomBar(selected: Int, onSelect: (Int) -> Unit) {
     Surface(color = BarBg, tonalElevation = 0.dp) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            barItems.forEachIndexed { index, item ->
-                BarButton(
-                    item = item,
-                    selected = selected == index,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onSelect(index) },
-                )
+        Column {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(app.familyos.guard.ui.cardBorder.copy(alpha = 0.6f)),
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp)
+                    .padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                barItems.forEachIndexed { index, item ->
+                    if (index == 2) {
+                        CenterBarButton(
+                            item = item,
+                            selected = selected == index,
+                            modifier = Modifier.weight(1.1f),
+                            onClick = { onSelect(index) },
+                        )
+                    } else {
+                        BarButton(
+                            item = item,
+                            selected = selected == index,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onSelect(index) },
+                        )
+                    }
+                }
             }
         }
     }
@@ -84,31 +107,59 @@ fun BottomBar(selected: Int, onSelect: (Int) -> Unit) {
 private fun BarButton(item: BarItem, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() }
-            .padding(vertical = 6.dp),
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(
+            imageVector = item.icon,
+            contentDescription = item.label,
+            tint = if (selected) app.familyos.guard.ui.accent else BarMuted,
+            modifier = Modifier.size(21.dp),
+        )
+        Text(
+            item.label,
+            color = if (selected) app.familyos.guard.ui.accent else BarMuted,
+            fontSize = 9.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun CenterBarButton(item: BarItem, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier = modifier.clickable { onClick() },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
+                .size(50.dp)
+                .clip(CircleShape)
                 .background(
-                    if (selected) Color(0xFF17352B) else Color.Transparent,
-                )
-                .padding(horizontal = 12.dp, vertical = 5.dp),
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        listOf(
+                            app.familyos.guard.ui.accent,
+                            app.familyos.guard.ui.accent.copy(alpha = 0.82f),
+                        ),
+                    ),
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
-                tint = if (selected) Color(0xFF34D399) else BarMuted,
-                modifier = Modifier.size(20.dp),
+                tint = Color(0xFF07090D),
+                modifier = Modifier.size(24.dp),
             )
         }
         Text(
             item.label,
-            color = if (selected) Color(0xFF34D399) else BarMuted,
+            color = if (selected) app.familyos.guard.ui.accent else BarMuted,
             fontSize = 9.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
@@ -162,7 +213,7 @@ fun LevelUpDialog(
             StatRow("Интеллект", intellect, Color(0xFF60A5FA))
             StatRow("Творчество", creativity, Color(0xFFC084FC))
             StatRow("Доброта", kindness, Color(0xFFFBBF24))
-            StatRow("Дисциплина", discipline, Color(0xFF34D399))
+            StatRow("Дисциплина", discipline, app.familyos.guard.ui.accent)
             Spacer(Modifier.height(6.dp))
             Text(
                 "Нажми, чтобы продолжить",
@@ -211,7 +262,7 @@ fun AddFab(onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
-        color = Color(0xFF34D399),
+        color = app.familyos.guard.ui.accent,
         shadowElevation = 6.dp,
     ) {
         Row(
@@ -222,10 +273,10 @@ fun AddFab(onClick: () -> Unit) {
             Icon(
                 Icons.Filled.Add,
                 contentDescription = "Добавить",
-                tint = Color(0xFF05221A),
+                tint = app.familyos.guard.ui.accentCard,
                 modifier = Modifier.size(20.dp),
             )
-            Text("Предложить", color = Color(0xFF05221A), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text("Предложить", color = app.familyos.guard.ui.accentCard, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         }
     }
 }

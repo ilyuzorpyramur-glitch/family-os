@@ -40,7 +40,7 @@ import app.familyos.guard.data.GeofenceStatus
 import java.time.LocalDate
 import java.time.YearMonth
 
-private val CalAccent = Color(0xFF34D399)
+private val CalAccent = app.familyos.guard.ui.accent
 private val CalGold = Color(0xFFFBBF24)
 private val CalMuted = Color(0xFF8B9BB0)
 private val CalEmpty = Color(0xFF0F151D)
@@ -128,21 +128,18 @@ private fun DayCell(
     Box(
         modifier = Modifier
             .size(34.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(11.dp))
             .background(
                 when {
-                    done -> Brush.linearGradient(listOf(Color(0xFF34D399), Color(0xFF059669)))
-                    planned -> Brush.linearGradient(listOf(Color(0xFF2A3442), Color(0xFF232D3A)))
-                    else -> Brush.linearGradient(listOf(CalEmpty, CalEmpty))
+                    selected -> app.familyos.guard.ui.accent
+                    done -> app.familyos.guard.ui.accentCard
+                    planned -> Color(0xFF1B212B)
+                    else -> CalEmpty
                 },
             )
             .then(
-                if (selected || isToday) {
-                    Modifier.border(
-                        1.5.dp,
-                        if (selected) CalGold else Color(0xFF3B4A5C),
-                        RoundedCornerShape(10.dp),
-                    )
+                if (isToday && !selected) {
+                    Modifier.border(1.5.dp, app.familyos.guard.ui.accent, RoundedCornerShape(11.dp))
                 } else {
                     Modifier
                 },
@@ -154,8 +151,13 @@ private fun DayCell(
             Text(
                 "$day",
                 fontSize = 12.sp,
-                fontWeight = if (done) FontWeight.Bold else FontWeight.Normal,
-                color = if (done) Color(0xFF04140E) else if (planned) Color(0xFFE6EDF3) else CalMuted,
+                fontWeight = if (selected || done) FontWeight.Bold else FontWeight.Normal,
+                color = when {
+                    selected -> Color(0xFF07090D)
+                    done -> app.familyos.guard.ui.accent
+                    planned -> app.familyos.guard.ui.textPrimary
+                    else -> CalMuted
+                },
             )
             if (hasEvents) {
                 Box(
@@ -163,9 +165,11 @@ private fun DayCell(
                         .padding(top = 1.dp)
                         .size(4.dp)
                         .clip(CircleShape)
-                        .background(CalGold),
+                        .background(if (selected) Color(0xFF07090D) else CalGold),
                 )
             }
+        }
+    }
         }
     }
 }

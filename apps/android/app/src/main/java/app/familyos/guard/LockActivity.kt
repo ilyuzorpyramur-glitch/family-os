@@ -58,8 +58,9 @@ class LockActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(
+                shapes = app.familyos.guard.ui.AppShapes,
                 colorScheme = darkColorScheme(
-                    primary = Color(0xFF34D399),
+                    primary = app.familyos.guard.ui.accent,
                     background = Color(0xFF0B0F14),
                     surface = Color(0xFF121922),
                     onSurface = Color(0xFFE6EDF3),

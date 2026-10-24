@@ -159,7 +159,7 @@ fun AllPermissionsScreen(
                     Text(
                         if (adbEnabled) "включён" else "выключен",
                         fontSize = 11.sp,
-                        color = if (adbEnabled) Color(0xFF34D399) else Color(0xFFF87171),
+                        color = if (adbEnabled) app.familyos.guard.ui.accent else Color(0xFFF87171),
                     )
                 }
                 Text(
@@ -222,7 +222,7 @@ private fun PermissionItem(title: String, done: Boolean, why: String, action: ()
                 Text(why, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (done) {
-                Text("есть", color = Color(0xFF34D399), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text("есть", color = app.familyos.guard.ui.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             } else {
                 TextButton(onClick = action) { Text("Выдать") }
             }

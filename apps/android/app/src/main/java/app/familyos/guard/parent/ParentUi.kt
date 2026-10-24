@@ -285,6 +285,20 @@ fun ParentApp(
 }
 
 @Composable
+@Composable
+private fun BigMetric(value: String, label: String, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(value, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = PAccent)
+            Text(label, fontSize = 11.sp, color = PMuted)
+        }
+    }
+}
+
 private fun PTab(label: String, selected: Boolean, onClick: () -> Unit) {
     Column(
         Modifier.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -376,6 +390,19 @@ private fun ParentOverview(
             Text("Обзор", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
         }
+        val screenTotal = children.sumOf { it.usedMinutes }
+        val requestTotal = children.sumOf { it.pendingRequests }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BigMetric("$screenTotal", "минут экрана", Modifier.weight(1f))
+                BigMetric("$requestTotal", "запросов", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                BigMetric("$pendingEvents", "событий", Modifier.weight(1f))
+                BigMetric("${children.size}", "детей", Modifier.weight(1f))
+            }
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(Modifier.weight(1f)) {
                 ParentQuestCreator(children = children, api = { api() }, onDone = onRefresh)
@@ -601,7 +628,7 @@ private fun ParentMoneyScreen(
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             ) {
                 Column(
-                    Modifier.background(Brush.linearGradient(listOf(Color(0xFF10352A), Color(0xFF151B24)))).padding(16.dp),
+                    Modifier.background(Brush.linearGradient(listOf(app.familyos.guard.ui.accentDeep, Color(0xFF151B24)))).padding(16.dp),
                 ) {
                     Text("Баланс", color = PMuted, fontSize = 11.sp)
                     Text(
@@ -874,7 +901,7 @@ private fun FilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) Color(0xFF17352B) else Color(0xFF101820))
+            .background(if (selected) app.familyos.guard.ui.accentSoft else Color(0xFF101820))
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
@@ -1079,7 +1106,7 @@ private fun ZenMoneyDialog(api: () -> ParentApi, onClose: () -> Unit) {
                     ) { CircularProgressIndicator(Modifier.size(24.dp)) }
 
                     true -> {
-                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0E2A22))) {
+                        Card(colors = CardDefaults.cardColors(containerColor = app.familyos.guard.ui.accentCard)) {
                             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("Подключено", color = PAccent, fontWeight = FontWeight.SemiBold)
                                 masked?.let { Text("Токен $it", fontSize = 11.sp, color = PMuted) }
@@ -1169,7 +1196,7 @@ private fun ZenMoneyDialog(api: () -> ParentApi, onClose: () -> Unit) {
                 }
 
                 message?.let {
-                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF0E2A22))) {
+                    Card(colors = CardDefaults.cardColors(containerColor = app.familyos.guard.ui.accentCard)) {
                         Text(it, Modifier.padding(10.dp), color = PAccent, fontSize = 12.sp)
                     }
                 }

@@ -30,7 +30,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-private val QAccent = Color(0xFF34D399)
+private val QAccent = app.familyos.guard.ui.accent
 private val QMuted = Color(0xFF8B9BB0)
 
 /** Задание-список покупок: отметка только сканированием штрихкода. */

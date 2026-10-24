@@ -44,7 +44,7 @@ import app.familyos.guard.data.HomeData
 import app.familyos.guard.data.ProfileData
 import coil.compose.AsyncImage
 
-private val Accent = Color(0xFF34D399)
+private val Accent = app.familyos.guard.ui.accent
 private val Gold = Color(0xFFFBBF24)
 private val Muted = Color(0xFF8B9BB0)
 
@@ -103,7 +103,7 @@ fun HomeScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .background(Brush.linearGradient(listOf(Color(0xFF10352A), Color(0xFF121922))))
+                    .background(Brush.linearGradient(listOf(app.familyos.guard.ui.accentDeep, Color(0xFF121922))))
                     .padding(18.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -158,7 +158,7 @@ fun HomeScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 "${day.consumed} из ${day.target} ккал",
-                                color = if (day.over) Color(0xFFF87171) else Color(0xFF34D399),
+                                color = if (day.over) Color(0xFFF87171) else app.familyos.guard.ui.accent,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,
                             )
@@ -168,7 +168,7 @@ fun HomeScreen(
                     LinearProgressIndicator(
                         progress = { (day.percent.coerceIn(0, 100)) / 100f },
                         modifier = Modifier.fillMaxWidth().height(8.dp),
-                        color = if (day.over) Color(0xFFF87171) else Color(0xFF34D399),
+                        color = if (day.over) Color(0xFFF87171) else app.familyos.guard.ui.accent,
                         trackColor = Color(0xFF1F2A37),
                     )
                     Text(

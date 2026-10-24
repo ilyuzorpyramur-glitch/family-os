@@ -23,12 +23,18 @@ class ParentActivity : ComponentActivity() {
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(
-                    primary = Color(android.graphics.Color.parseColor(BuildConfig.ACCENT)),
-                    background = Color(0xFF0B0F14),
-                    surface = Color(0xFF121922),
-                    onSurface = Color(0xFFE6EDF3),
-                    onSurfaceVariant = Color(0xFF8B9BB0),
+                    primary = app.familyos.guard.ui.accent,
+                    onPrimary = Color(0xFF120800),
+                    primaryContainer = app.familyos.guard.ui.accentDeep,
+                    onPrimaryContainer = app.familyos.guard.ui.textPrimary,
+                    background = app.familyos.guard.ui.bg,
+                    surface = app.familyos.guard.ui.cardBg,
+                    surfaceVariant = app.familyos.guard.ui.cardBgAlt,
+                    onSurface = app.familyos.guard.ui.textPrimary,
+                    onSurfaceVariant = app.familyos.guard.ui.textMuted,
+                    outline = app.familyos.guard.ui.cardBorder,
                 ),
+                shapes = app.familyos.guard.ui.AppShapes,
             ) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     ParentApp(

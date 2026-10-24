@@ -42,7 +42,7 @@ import app.familyos.guard.data.Product
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-private val PntAccent = Color(0xFF34D399)
+private val PntAccent = app.familyos.guard.ui.accent
 private val PntMuted = Color(0xFF8B9BB0)
 private val PntRed = Color(0xFFF87171)
 
@@ -133,7 +133,7 @@ fun ParentPantryScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("🛒", fontSize = 20.sp)
-                    Text("Скан", color = Color(0xFF05221A), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Скан", color = app.familyos.guard.ui.accentCard, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }

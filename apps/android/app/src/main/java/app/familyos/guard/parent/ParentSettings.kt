@@ -33,7 +33,7 @@ import app.familyos.guard.data.Product
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-private val SetAccent = Color(0xFF34D399)
+private val SetAccent = app.familyos.guard.ui.accent
 private val SetMuted = Color(0xFF8B9BB0)
 private val SetRed = Color(0xFFF87171)
 
