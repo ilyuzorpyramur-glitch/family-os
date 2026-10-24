@@ -245,6 +245,7 @@ class MainActivity : ComponentActivity() {
                                         onAccessibilitySettings = { openAccessibilitySettings() },
                                         onAdmin = { requestAdmin() },
                                         onSiteFilter = { requestSiteFilter() },
+                                        vpnEnabled = store.vpnWanted,
                                         onReset = { reset() },
                                     )
                                     else -> ProfileScreen(
@@ -855,6 +856,7 @@ private fun Dashboard(
     onAccessibilitySettings: () -> Unit,
     onAdmin: () -> Unit,
     onSiteFilter: () -> Unit,
+    vpnEnabled: Boolean,
     onReset: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -933,7 +935,7 @@ private fun Dashboard(
                 if (!state.deviceOwner) PermissionRow("Device Owner (защита от удаления)", false, onAdmin)
                 PermissionRow(
                     "Фильтр нежелательных сайтов",
-                    granted = store.vpnWanted,
+                    granted = vpnEnabled,
                     onOpen = onSiteFilter,
                 )
                 if (state.usageAccess && state.accessibility && state.deviceOwner) {
