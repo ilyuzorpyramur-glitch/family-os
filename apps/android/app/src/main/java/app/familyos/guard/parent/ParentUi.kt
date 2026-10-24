@@ -1091,6 +1091,7 @@ private fun ParentChildrenScreen(
     var normValue by remember { mutableStateOf("2000") }
     var nutrition by remember { mutableStateOf<Map<String, ChildNutrition>>(emptyMap()) }
     var blocked by remember { mutableStateOf(0) }
+    var localError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     suspend fun reloadFacts() {
@@ -1224,21 +1225,36 @@ private fun ParentChildrenScreen(
         return
     }
 
-    ChildrenTab(
-        children = children,
-        nutrition = nutrition,
-        blockedCount = blocked,
-        busy = busy,
-        onOpen = { profileChild = it },
-        onLimit = { policyChild = it },
-        onCreate = { name ->
-            scope.launch {
-                runCatching { api().post("/api/guard/children", JSONObject().put("name", name)) }
-                    .onFailure { error = it.message }
-                onRefresh()
+    Box(Modifier.fillMaxSize()) {
+        ChildrenTab(
+            children = children,
+            nutrition = nutrition,
+            blockedCount = blocked,
+            busy = busy,
+            onOpen = { profileChild = it },
+            onLimit = { policyChild = it },
+            onCreate = { name ->
+                scope.launch {
+                    runCatching { api().post("/api/guard/children", JSONObject().put("name", name)) }
+                        .onFailure { localError = it.message ?: "Не удалось создать профиль" }
+                    onRefresh()
+                }
+            },
+        )
+        localError?.let { message ->
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color(0xFF2A1214))
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(message, color = Color(0xFFFCA5A5), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text("ок", color = PMuted, fontSize = 11.sp, modifier = Modifier.clickable { localError = null })
             }
-        },
-    )
+        }
+    }
 }
 
 /** Zen Money: статус, подключение, синхронизация, отключение. */
