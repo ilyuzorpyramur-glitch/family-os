@@ -388,7 +388,8 @@ private fun ParentQuestCreator(
     var title by remember { mutableStateOf("") }
     var type by remember { mutableStateOf("task") }
     var shoppingRaw by remember { mutableStateOf("") }
-    var minutes by remember { mutableStateOf("45") }
+    var startTime by remember { mutableStateOf("15:00") }
+    var endTime by remember { mutableStateOf("16:00") }
     var recipes by remember { mutableStateOf<List<app.familyos.guard.data.Recipe>>(emptyList()) }
     var recipeId by remember { mutableStateOf<String?>(null) }
     var status by remember { mutableStateOf<String?>(null) }
@@ -439,7 +440,11 @@ private fun ParentQuestCreator(
                         FilterPill(recipe.title, recipeId == recipe.id) { recipeId = recipe.id }
                     }
                 }
-                OutlinedTextField(minutes, { minutes = it }, label = { Text("Минут на задание") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(startTime, { startTime = it }, label = { Text("С") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(endTime, { endTime = it }, label = { Text("До") }, singleLine = true, modifier = Modifier.weight(1f))
+                }
+                Text("В это время телефон ребёнка блокируется (кроме звонков и SMS).", color = PMuted, fontSize = 10.sp)
             }
         },
         confirmButton = {
@@ -452,7 +457,8 @@ private fun ParentQuestCreator(
                         .put("xp", 20)
                         .put("coins", 10)
                         .put("approval", "parent")
-                        .put("sessionMinutes", minutes.toIntOrNull()?.coerceIn(0, 600) ?: 45)
+                        .put("sessionStart", startTime)
+                        .put("sessionEnd", endTime)
                     if (type == "shopping") {
                         val items = org.json.JSONArray()
                         shoppingRaw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
@@ -497,6 +503,7 @@ private fun ParentMoneyScreen(
     var showAccount by remember { mutableStateOf(false) }
     var showCsv by remember { mutableStateOf(false) }
     var showBank by remember { mutableStateOf(false) }
+    var showZen by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -513,6 +520,7 @@ private fun ParentMoneyScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterPill("Импорт выписки", false) { showCsv = true }
                 FilterPill("Банк", false) { showBank = true }
+                FilterPill("Zen Money", false) { showZen = true }
             }
 
             status?.let {
@@ -655,6 +663,42 @@ private fun ParentMoneyScreen(
                 ) { Text("Импортировать") }
             },
             dismissButton = { TextButton(onClick = { showCsv = false }) { Text("Отмена") } },
+        )
+    }
+
+    if (showZen) {
+        var token by remember { mutableStateOf("") }
+        var zenStatus by remember { mutableStateOf<String?>(null) }
+        AlertDialog(
+            onDismissRequest = { showZen = false },
+            title = { Text("Zen Money") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Добавь банк в приложении Zen Money/Zerro и вставь токен API.", color = PMuted, fontSize = 11.sp)
+                    OutlinedTextField(
+                        token,
+                        { token = it },
+                        label = { Text("Токен Zen Money") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    zenStatus?.let { Text(it, color = PAccent, fontSize = 11.sp) }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            runCatching {
+                                if (token.isNotBlank()) api().post("/api/zenmoney/token", JSONObject().put("token", token.trim()))
+                                api().post("/api/zenmoney/sync")
+                            }.onSuccess { zenStatus = "Токен сохранён, синхронизация запущена" }
+                                .onFailure { zenStatus = "Ошибка: ${it.message}" }
+                        }
+                    },
+                ) { Text("Сохранить и синхронизировать") }
+            },
+            dismissButton = { TextButton(onClick = { showZen = false }) { Text("Закрыть") } },
         )
     }
 
@@ -887,128 +931,6 @@ private fun ParentChildrenScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ParentPantryScreen(
-    busy: Boolean,
-    onRefresh: () -> Unit,
-    api: () -> ParentApi,
-) {
-    var products by remember { mutableStateOf<List<app.familyos.guard.data.Product>>(emptyList()) }
-    var barcode by remember { mutableStateOf("") }
-    var title by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("1") }
-    var status by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    suspend fun reload() {
-        runCatching { products = app.familyos.guard.data.Product.listFrom(api().get("/api/products")) }
-            .onFailure { status = it.message }
-    }
-
-    LaunchedEffect(Unit) { reload() }
-
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Склад", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            TextButton(onClick = { scope.launch { onRefresh(); reload() } }, enabled = !busy) { Text("Обновить") }
-        }
-        status?.let { Text(it, color = PAccent, fontSize = 12.sp) }
-
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Сканер штрихкода", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                OutlinedTextField(
-                    barcode,
-                    { barcode = it },
-                    label = { Text("Штрихкод") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Button(
-                    onClick = {
-                        val code = barcode.trim()
-                        if (code.length >= 4) {
-                            scope.launch {
-                                val result = runCatching {
-                                    api().post("/api/products/scan", JSONObject().put("barcode", code).put("quantity", 1))
-                                }
-                                status = result.fold(
-                                    { "Добавлено: " + (it.optJSONObject("data")?.optJSONObject("product")?.optString("title") ?: "товар") },
-                                    { "Ошибка: ${it.message}" },
-                                )
-                                barcode = ""
-                                reload()
-                            }
-                        }
-                    },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Найти и добавить") }
-                Text("Берём название и КБЖУ из Open Food Facts.", color = PMuted, fontSize = 10.sp)
-            }
-        }
-
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Добавить вручную", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                OutlinedTextField(title, { title = it }, label = { Text("Название") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(quantity, { quantity = it }, label = { Text("Количество") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Button(
-                    onClick = {
-                        if (title.isNotBlank()) {
-                            scope.launch {
-                                runCatching {
-                                    api().post(
-                                        "/api/products",
-                                        JSONObject()
-                                            .put("title", title.trim())
-                                            .put("quantity", quantity.replace(',', '.').toDoubleOrNull() ?: 1.0),
-                                    )
-                                }.onFailure { status = it.message }
-                                title = ""
-                                reload()
-                            }
-                        }
-                    },
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Добавить продукт") }
-            }
-        }
-
-        Text("На складе: ${products.size}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        products.forEach { product ->
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Row(
-                    Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(product.title, fontSize = 13.sp, maxLines = 1)
-                        val kbju = listOfNotNull(
-                            product.kcal?.let { "%.0f ккал".format(it) },
-                            product.protein?.let { "Б %.0f".format(it) },
-                            product.fat?.let { "Ж %.0f".format(it) },
-                            product.carbs?.let { "У %.0f".format(it) },
-                        ).joinToString(" · ")
-                        if (kbju.isNotBlank()) Text(kbju, color = PMuted, fontSize = 10.sp)
-                    }
-                    Text(
-                        "%.1f %s".format(product.quantity, product.unit),
-                        color = if (product.quantity > 0) PAccent else PRed,
-                        fontSize = 12.sp,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(50.dp))
     }
 }
 

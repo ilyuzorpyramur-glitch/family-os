@@ -78,7 +78,9 @@ import app.familyos.guard.data.QuestItem
 import app.familyos.guard.data.ShopData
 import app.familyos.guard.service.AppBlockService
 import app.familyos.guard.work.GuardNotifications
+import app.familyos.guard.service.DnsVpnService
 import app.familyos.guard.service.LocationTrackingService
+import android.net.VpnService
 import kotlinx.coroutines.launch
 import java.time.YearMonth
 
@@ -117,6 +119,11 @@ class MainActivity : ComponentActivity() {
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private val vpnPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) startSiteFilter()
+        }
 
     private val backgroundLocationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -195,7 +202,6 @@ class MainActivity : ComponentActivity() {
                                             val part = if (raw.contains('T')) raw.substringAfter('T') else raw.substringAfter(' ')
                                             part.take(5).ifBlank { "конца задания" }
                                         },
-                                        onFinish = { finishSessionNow(active.optString("questId")) },
                                     )
                                 } else when (tab) {
                                     0 -> HomeScreen(
@@ -238,6 +244,7 @@ class MainActivity : ComponentActivity() {
                                         onUsageSettings = { openUsageSettings() },
                                         onAccessibilitySettings = { openAccessibilitySettings() },
                                         onAdmin = { requestAdmin() },
+                                        onSiteFilter = { requestSiteFilter() },
                                         onReset = { reset() },
                                     )
                                     else -> ProfileScreen(
@@ -364,6 +371,7 @@ class MainActivity : ComponentActivity() {
             }
             runCatching { api.profile() }.onSuccess { profile = it }
             runCatching { api.calendar(YearMonth.now().toString()) }.onSuccess { calendar = it }
+            runCatching { api.siteRules() }.onSuccess { store.vpnRules = it.toString() }
             runCatching { api.policySession() }.onSuccess {
                 session = it
                 store.sessionActive = it != null
@@ -622,6 +630,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun requestSiteFilter() {
+        val prepare = VpnService.prepare(this)
+        if (prepare == null) {
+            startSiteFilter()
+        } else {
+            runCatching { vpnPermission.launch(prepare) }
+        }
+    }
+
+    private fun startSiteFilter() {
+        store.vpnWanted = true
+        runCatching { startService(Intent(this, DnsVpnService::class.java)) }
+        message = "Фильтр сайтов включён"
+    }
+
     private fun startTracking() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) !=
             PackageManager.PERMISSION_GRANTED
@@ -787,6 +810,7 @@ private fun Dashboard(
     onUsageSettings: () -> Unit,
     onAccessibilitySettings: () -> Unit,
     onAdmin: () -> Unit,
+    onSiteFilter: () -> Unit,
     onReset: () -> Unit,
 ) {
     val context = LocalContext.current

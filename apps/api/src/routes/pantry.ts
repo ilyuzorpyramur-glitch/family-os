@@ -6,6 +6,7 @@ import {
   cookRecipe,
   createProduct,
   createRecipe,
+  deductProduct,
   deleteProduct,
   findProductByBarcode,
   getProduct,
@@ -74,6 +75,17 @@ export function registerPantryApi(app: FastifyInstance, ctx: Ctx): void {
       return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
     }
     const product = updateProduct(db, id, body.data);
+    if (!product) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Продукт не найден" } });
+    return { ok: true, data: product };
+  });
+
+  app.post("/api/products/:id/consume", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ amount: z.number().min(0.01).max(100000) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужно количество" } });
+    }
+    const product = deductProduct(db, id, body.data.amount);
     if (!product) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Продукт не найден" } });
     return { ok: true, data: product };
   });

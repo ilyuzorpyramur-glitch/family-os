@@ -32,6 +32,8 @@ export type QuestRow = {
   quest_type: string;
   recipe_id: string | null;
   session_minutes: number;
+  session_start: string | null;
+  session_end: string | null;
   created_by: string;
   created_at: string;
   completed_at: string | null;
@@ -122,13 +124,15 @@ export type QuestInput = {
   questType?: "task" | "shopping" | "cooking";
   recipeId?: string | null;
   sessionMinutes?: number;
+  sessionStart?: string | null;
+  sessionEnd?: string | null;
 };
 
 export function createQuest(db: DB, input: QuestInput): QuestRow {
   const id = `q_${crypto.randomUUID()}`;
   db.prepare(
-    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required, shared, quest_type, recipe_id, session_minutes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO quests (id, child_id, title, description, kind, xp, coins, stat, due_at, created_by, approval, photos_required, shared, quest_type, recipe_id, session_minutes, session_start, session_end)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.childId,
@@ -146,6 +150,8 @@ export function createQuest(db: DB, input: QuestInput): QuestRow {
     input.questType ?? "task",
     input.recipeId ?? null,
     Math.max(0, Math.min(600, Math.round(input.sessionMinutes ?? 0))),
+    input.sessionStart ?? null,
+    input.sessionEnd ?? null,
   );
   addQuestEvent(db, input.childId, id, "created", { by: input.createdBy ?? "parent" });
   return getQuest(db, id)!;

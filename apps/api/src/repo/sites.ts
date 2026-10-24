@@ -1,7 +1,7 @@
 import type { DB } from "../db.js";
 
 export type SiteVisitRow = { id: string; child_id: string; domain: string; at: string };
-export type BlockedSiteRow = { domain: string; reason: string | null; created_at: string };
+export type BlockedSiteRow = { domain: string; reason: string | null; created_at: string; kind: string };
 
 const ADULT_PATTERNS = [
   "porn",
@@ -64,6 +64,16 @@ export function listBlocked(db: DB): BlockedSiteRow[] {
   return db.prepare("SELECT * FROM blocked_sites ORDER BY domain").all() as BlockedSiteRow[];
 }
 
+export function listRules(db: DB, kind: "allow" | "block"): BlockedSiteRow[] {
+  return db.prepare("SELECT * FROM blocked_sites WHERE kind = ? ORDER BY domain").all(kind) as BlockedSiteRow[];
+}
+
+export function addRule(db: DB, domain: string, kind: "allow" | "block", reason?: string | null): BlockedSiteRow {
+  const clean = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").slice(0, 200);
+  db.prepare("INSERT OR REPLACE INTO blocked_sites (domain, reason, kind) VALUES (?, ?, ?)").run(clean, reason ?? null, kind);
+  return db.prepare("SELECT * FROM blocked_sites WHERE domain = ?").get(clean) as BlockedSiteRow;
+}
+
 export function addBlocked(db: DB, domain: string, reason?: string | null): BlockedSiteRow {
   const clean = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").slice(0, 200);
   db.prepare("INSERT OR REPLACE INTO blocked_sites (domain, reason) VALUES (?, ?)").run(clean, reason ?? null);
@@ -75,9 +85,10 @@ export function removeBlocked(db: DB, domain: string): void {
 }
 
 /** Полный список для устройства: ручные + эвристические шаблоны. */
-export function blocklistForDevice(db: DB): { domains: string[]; patterns: string[] } {
+export function blocklistForDevice(db: DB): { block: string[]; allow: string[]; patterns: string[] } {
   return {
-    domains: listBlocked(db).map((row) => row.domain),
+    block: listRules(db, "block").map((row) => row.domain),
+    allow: listRules(db, "allow").map((row) => row.domain),
     patterns: ADULT_PATTERNS,
   };
 }

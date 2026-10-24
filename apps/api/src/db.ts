@@ -440,6 +440,9 @@ export function openDb(file: string): DB {
   addColumn(db, "quests", "quest_type", "quest_type TEXT NOT NULL DEFAULT 'task'");
   addColumn(db, "quests", "recipe_id", "recipe_id TEXT");
   addColumn(db, "quests", "session_minutes", "session_minutes INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "quests", "session_start", "session_start TEXT");
+  addColumn(db, "quests", "session_end", "session_end TEXT");
+  addColumn(db, "blocked_sites", "kind", "kind TEXT NOT NULL DEFAULT 'block'");
   return db;
 }
 

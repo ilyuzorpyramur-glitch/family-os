@@ -19,6 +19,14 @@ class GuardStore(context: Context) {
         get() = prefs.getString(KEY_POLICY, null)
         set(value) = prefs.edit().putString(KEY_POLICY, value).apply()
 
+    var vpnRules: String?
+        get() = prefs.getString(KEY_VPN_RULES, null)
+        set(value) = prefs.edit().putString(KEY_VPN_RULES, value).apply()
+
+    var vpnWanted: Boolean
+        get() = prefs.getBoolean(KEY_VPN_WANTED, false)
+        set(value) = prefs.edit().putBoolean(KEY_VPN_WANTED, value).apply()
+
     var sessionActive: Boolean
         get() = prefs.getBoolean(KEY_SESSION, false)
         set(value) = prefs.edit().putBoolean(KEY_SESSION, value).apply()
@@ -56,6 +64,8 @@ class GuardStore(context: Context) {
         private const val KEY_POLICY = "policy_json"
         private const val KEY_POLICY_AT = "policy_at"
         private const val KEY_SESSION = "session_active"
+        private const val KEY_VPN_RULES = "vpn_rules"
+        private const val KEY_VPN_WANTED = "vpn_wanted"
         private const val KEY_PARENT_TOKEN = "parent_token"
     }
 }

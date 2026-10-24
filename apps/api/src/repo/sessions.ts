@@ -79,3 +79,34 @@ export function shoppingProgress(db: DB, questId: string): { total: number; done
   const items = listShoppingItems(db, questId);
   return { total: items.length, done: items.filter((item) => item.checked_at).length, items };
 }
+
+
+export type WindowSession = { questId: string; title: string; endsAt: string };
+
+function minutesOf(value: string): number {
+  const [h, m] = value.split(":");
+  return Number(h) * 60 + Number(m);
+}
+
+/** Активное задание по расписанию родителя (окно «с–до»), без ручного старта. */
+export function windowSession(db: DB, childId: string, now = new Date()): WindowSession | null {
+  const rows = db
+    .prepare(
+      `SELECT id, title, session_start, session_end FROM quests
+       WHERE (child_id = ? OR shared = 1) AND status = 'active' AND session_start IS NOT NULL AND session_end IS NOT NULL`,
+    )
+    .all(childId) as { id: string; title: string; session_start: string; session_end: string }[];
+
+  const current = now.getHours() * 60 + now.getMinutes();
+  for (const row of rows) {
+    const start = minutesOf(row.session_start);
+    const end = minutesOf(row.session_end);
+    const inside = end >= start ? current >= start && current < end : current >= start || current < end;
+    if (!inside) continue;
+    const endsAt = new Date(now);
+    endsAt.setHours(Math.floor(end / 60), end % 60, 0, 0);
+    if (end < start) endsAt.setDate(endsAt.getDate() + 1);
+    return { questId: row.id, title: row.title, endsAt: endsAt.toISOString() };
+  }
+  return null;
+}

@@ -76,6 +76,8 @@ export function registerQuestApi(app: FastifyInstance, ctx: Ctx): void {
         questType: z.enum(["task", "shopping", "cooking"]).default("task"),
         recipeId: z.string().nullable().optional(),
         sessionMinutes: z.number().int().min(0).max(600).default(0),
+        sessionStart: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+        sessionEnd: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
         shoppingItems: z
           .array(z.object({ title: z.string().min(1).max(120), barcode: z.string().max(64).nullable().optional() }))
           .max(60)

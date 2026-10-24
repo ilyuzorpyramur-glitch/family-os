@@ -198,7 +198,6 @@ fun CookingQuestDialog(
 fun SessionBlockScreen(
     title: String,
     endsAt: String,
-    onFinish: () -> Unit,
 ) {
     Column(
         Modifier
@@ -218,6 +217,6 @@ fun SessionBlockScreen(
             }
         }
         Spacer(Modifier.height(18.dp))
-        Button(onClick = onFinish, modifier = Modifier.fillMaxWidth()) { Text("Я закончил задание") }
+        Text("Блокировка снимется сама в $endsAt", color = QMuted, fontSize = 12.sp)
     }
 }

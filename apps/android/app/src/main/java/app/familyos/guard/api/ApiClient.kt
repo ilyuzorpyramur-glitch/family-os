@@ -208,6 +208,17 @@ class ApiClient(private val store: GuardStore) {
         Unit
     }
 
+    suspend fun siteRules(): JSONObject = withContext(Dispatchers.IO) {
+        call("GET", "/api/device/sites/blocklist", null).optJSONObject("data") ?: JSONObject()
+    }
+
+    suspend fun sendSites(domains: List<String>) = withContext(Dispatchers.IO) {
+        val array = JSONArray()
+        domains.forEach { array.put(it) }
+        call("POST", "/api/device/sites", JSONObject().put("domains", array))
+        Unit
+    }
+
     suspend fun reportCrash(message: String, stack: String): Unit = withContext(Dispatchers.IO) {
         call(
             "POST",

@@ -4,8 +4,9 @@ import { bearerActor, isAdminCookie } from "../auth.js";
 import type { Ctx } from "./api.js";
 import { localDateISO } from "../lib/time.js";
 import { ensureProfile, profileView, refreshRecurring } from "../repo/quest.js";
-import { activeSession } from "../repo/sessions.js";
-import { addBlocked, listBlocked, listVisits, recordVisits, removeBlocked } from "../repo/sites.js";
+import { activeSession, windowSession } from "../repo/sessions.js";
+import { listProducts } from "../repo/pantry.js";
+import { addBlocked, addRule, blocklistForDevice, listBlocked, listRules, listVisits, recordVisits, removeBlocked } from "../repo/sites.js";
 import { homeData, processLocation } from "../repo/geo.js";
 import { imageUrl, saveImage } from "../uploads.js";
 import {
@@ -165,6 +166,41 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
       )
       .all(...(q.childId ? [date, q.childId] : [date]));
     return { ok: true, data: { date, apps: rows } };
+  });
+
+  app.get("/api/guard/sites/rules", { preHandler: parentGuard }, async () => ({
+    ok: true,
+    data: { block: listRules(db, "block"), allow: listRules(db, "allow") },
+  }));
+
+  app.post("/api/guard/sites/rules", { preHandler: parentGuard }, async (request, reply) => {
+    const body = z
+      .object({ domain: z.string().min(3).max(200), kind: z.enum(["allow", "block"]).default("block") })
+      .safeParse(request.body);
+    if (!body.success) {
+      return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: "Нужен домен" } });
+    }
+    return { ok: true, data: addRule(db, body.data.domain, body.data.kind) };
+  });
+
+  app.delete("/api/guard/sites/rules/:domain", { preHandler: parentGuard }, async (request) => {
+    const { domain } = request.params as { domain: string };
+    removeBlocked(db, decodeURIComponent(domain));
+    return { ok: true };
+  });
+
+  /** Список покупок от OpenClaw: что заканчивается + базовые продукты. */
+  app.get("/api/shopping/suggest", { preHandler: parentGuard }, async () => {
+    const low = listProducts(db).filter((product) => product.quantity <= Math.max(product.min_quantity, 1));
+    const children = listChildren(db).length;
+    const staples = children > 0 ? ["Хлеб", "Молоко", "Яйца", "Овощи", "Фрукты"] : ["Хлеб", "Молоко"];
+    const items = [
+      ...low.map((product) => ({ title: product.title, reason: "заканчивается", unit: product.unit })),
+      ...staples
+        .filter((title) => !listProducts(db).some((product) => product.title.toLowerCase() === title.toLowerCase()))
+        .map((title) => ({ title, reason: "базовый продукт", unit: "шт" })),
+    ];
+    return { ok: true, data: { familySize: children, items } };
   });
 
   app.get("/api/guard/crashes", { preHandler: parentGuard }, async () => ({
@@ -398,6 +434,8 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
         remainMinutes: Math.max(0, effectiveLimit(policy, today) - usage.minutes),
         coins: profile.coins,
         session: (() => {
+          const scheduled = windowSession(db, device.child_id);
+          if (scheduled) return { id: "window", questId: scheduled.questId, title: scheduled.title, endsAt: scheduled.endsAt };
           const active = activeSession(db, device.child_id);
           if (!active) return null;
           const quest = db.prepare("SELECT title FROM quests WHERE id = ?").get(active.quest_id) as
@@ -422,7 +460,7 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
 
   app.get("/api/device/sites/blocklist", { preHandler: deviceGuard }, async () => ({
     ok: true,
-    data: { domains: listBlocked(db).map((row) => row.domain) },
+    data: blocklistForDevice(db),
   }));
 
   app.get("/api/device/geofences", { preHandler: deviceGuard }, async (request) => {
