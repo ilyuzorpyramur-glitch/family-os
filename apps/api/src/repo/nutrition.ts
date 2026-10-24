@@ -9,6 +9,9 @@ export type MealRow = {
   kcal: number;
   grams: number | null;
   source: string;
+  protein: number;
+  fat: number;
+  carbs: number;
   created_at: string;
 };
 
@@ -21,11 +24,22 @@ export function localDate(date = new Date()): string {
 
 export function addMeal(
   db: DB,
-  input: { childId: string; title: string; kcal: number; grams?: number | null; date?: string; source?: string },
+  input: {
+    childId: string;
+    title: string;
+    kcal: number;
+    grams?: number | null;
+    date?: string;
+    source?: string;
+    protein?: number;
+    fat?: number;
+    carbs?: number;
+  },
 ): MealRow {
   const id = `meal_${randomUUID()}`;
   db.prepare(
-    `INSERT INTO meals (id, child_id, date, title, kcal, grams, source) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO meals (id, child_id, date, title, kcal, grams, source, protein, fat, carbs)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     input.childId,
@@ -34,6 +48,9 @@ export function addMeal(
     Math.max(0, Math.round(input.kcal)),
     input.grams ?? null,
     input.source ?? "manual",
+    Math.max(0, input.protein ?? 0),
+    Math.max(0, input.fat ?? 0),
+    Math.max(0, input.carbs ?? 0),
   );
   return db.prepare("SELECT * FROM meals WHERE id = ?").get(id) as MealRow;
 }
@@ -59,9 +76,23 @@ export function nutritionDay(db: DB, childId: string, date?: string, target = 20
     )
     .all(childId, day, day) as { date: string; kcal: number }[];
 
+  const macros = meals.reduce(
+    (sum, meal) => ({
+      protein: sum.protein + (meal.protein ?? 0),
+      fat: sum.fat + (meal.fat ?? 0),
+      carbs: sum.carbs + (meal.carbs ?? 0),
+    }),
+    { protein: 0, fat: 0, carbs: 0 },
+  );
+
   return {
     date: day,
     target,
+    macros: {
+      protein: Math.round(macros.protein),
+      fat: Math.round(macros.fat),
+      carbs: Math.round(macros.carbs),
+    },
     consumed: Math.round(consumed),
     left: Math.max(0, Math.round(target - consumed)),
     percent: target > 0 ? Math.min(100, Math.round((consumed / target) * 100)) : 0,

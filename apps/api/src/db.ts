@@ -482,6 +482,9 @@ export function openDb(file: string): DB {
   addColumn(db, "quests", "session_end", "session_end TEXT");
   addColumn(db, "blocked_sites", "kind", "kind TEXT NOT NULL DEFAULT 'block'");
   addColumn(db, "children", "kcal_target", "kcal_target INTEGER NOT NULL DEFAULT 2000");
+  addColumn(db, "meals", "protein", "protein REAL NOT NULL DEFAULT 0");
+  addColumn(db, "meals", "fat", "fat REAL NOT NULL DEFAULT 0");
+  addColumn(db, "meals", "carbs", "carbs REAL NOT NULL DEFAULT 0");
   addColumn(db, "children", "pay_limit", "pay_limit INTEGER NOT NULL DEFAULT 1500");
   addColumn(db, "children", "pay_daily_limit", "pay_daily_limit INTEGER NOT NULL DEFAULT 3000");
   return db;

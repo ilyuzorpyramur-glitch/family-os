@@ -256,7 +256,6 @@ fun ParentApp(
                     api = { api() },
                     onSave = { id, nickname, school, grade ->
                         scope.launch {
-                            busy = true
                             runCatching {
                                 api().patch(
                                     "/api/guard/children/$id/profile",
@@ -265,12 +264,29 @@ fun ParentApp(
                                         .put("school", school)
                                         .put("grade", grade),
                                 )
-                                loadAll()
+                                loadAll(force = true)
                             }.onFailure { error = it.message }
-                            busy = false
                         }
                     },
-                    onRefresh = { scope.launch { busy = true; loadAll(); busy = false } },
+                    onSaveKcal = { id, kcal ->
+                        scope.launch {
+                            runCatching {
+                                api().patch(
+                                    "/api/guard/children/$id/profile",
+                                    JSONObject().put("kcalTarget", kcal),
+                                )
+                                loadAll(force = true)
+                            }.onFailure { error = it.message }
+                        }
+                    },
+                    onDelete = { id ->
+                        scope.launch {
+                            runCatching { api().delete("/api/guard/children/$id"); loadAll(force = true) }
+                                .onFailure { error = it.message }
+                        }
+                    },
+                    onOpenEvents = { tab = 3 },
+                    onRefresh = { scope.launch { busy = true; loadAll(force = true); busy = false } },
                 )
             }
             if (busy) {
@@ -1058,6 +1074,9 @@ private fun ParentChildrenScreen(
     children: List<ChildCard>,
     busy: Boolean,
     onSave: (String, String, String, String) -> Unit,
+    onSaveKcal: (String, Int) -> Unit,
+    onDelete: (String) -> Unit,
+    onOpenEvents: () -> Unit,
     onRefresh: () -> Unit,
     api: () -> ParentApi,
 ) {
@@ -1066,17 +1085,38 @@ private fun ParentChildrenScreen(
     var pairCode by remember { mutableStateOf<String?>(null) }
     var pairPayload by remember { mutableStateOf<String?>(null) }
     var pairError by remember { mutableStateOf<String?>(null) }
-    var kcal by remember { mutableStateOf<Map<String, Pair<Int, Int>>>(emptyMap()) }
-    LaunchedEffect(api) {
+    var profileChild by remember { mutableStateOf<ChildCard?>(null) }
+    var sitesOpen by remember { mutableStateOf(false) }
+    var normChild by remember { mutableStateOf<ChildCard?>(null) }
+    var normValue by remember { mutableStateOf("2000") }
+    var nutrition by remember { mutableStateOf<Map<String, ChildNutrition>>(emptyMap()) }
+    var blocked by remember { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+
+    suspend fun reloadFacts() {
         runCatching {
             val data = api().get("/api/guard/nutrition").optJSONObject("data")
             val array = data?.optJSONArray("children") ?: return@runCatching
-            kcal = (0 until array.length()).associate { index ->
+            nutrition = (0 until array.length()).associate { index ->
                 val item = array.getJSONObject(index)
-                item.optString("childId") to (item.optInt("consumed") to item.optInt("target"))
+                val macros = item.optJSONObject("macros")
+                item.optString("childId") to ChildNutrition(
+                    consumed = item.optInt("consumed", 0),
+                    target = item.optInt("target", 2000),
+                    protein = macros?.optInt("protein", 0) ?: 0,
+                    fat = macros?.optInt("fat", 0) ?: 0,
+                    carbs = macros?.optInt("carbs", 0) ?: 0,
+                )
             }
         }
+        runCatching {
+            val rules = api().get("/api/guard/sites/rules").optJSONObject("data")
+            blocked = rules?.optJSONArray("block")?.length() ?: 0
+        }
     }
+
+    LaunchedEffect(children.size) { reloadFacts() }
+
     pairChild?.let { child ->
         QrPairDialog(
             child = child,
@@ -1084,11 +1124,10 @@ private fun ParentChildrenScreen(
             payload = pairPayload,
             error = pairError,
             onStart = {
-                pairChild = child
                 pairCode = null
                 pairPayload = null
                 pairError = null
-                kotlinx.coroutines.MainScope().launch {
+                scope.launch {
                     runCatching {
                         api().post("/api/guard/pair/device", JSONObject().put("childId", child.id))
                     }.onSuccess { root ->
@@ -1101,59 +1140,105 @@ private fun ParentChildrenScreen(
             onDismiss = { pairChild = null; pairCode = null; pairPayload = null },
         )
     }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Дети", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onRefresh, enabled = !busy) { Text("Обновить") }
-        }
-        policyChild?.let { child ->
-            PolicyDialog(
-                childId = child.id,
-                childName = child.nickname ?: child.name,
-                limitMinutes = child.limitMinutes,
-                bedtimeStart = "21:00",
-                bedtimeEnd = "07:00",
-                api = api,
-                onDismiss = { policyChild = null },
-                onSaved = onRefresh,
-            )
-        }
-        children.forEach { child ->
-            var nickname by remember(child.id, child.nickname) { mutableStateOf(child.nickname.orEmpty()) }
-            var school by remember(child.id, child.school) { mutableStateOf(child.school.orEmpty()) }
-            var grade by remember(child.id, child.grade) { mutableStateOf(child.grade.orEmpty()) }
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(child.name, fontWeight = FontWeight.SemiBold)
-                    OutlinedTextField(nickname, { nickname = it }, label = { Text("Никнейм") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(school, { school = it }, label = { Text("Школа") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(grade, { grade = it }, label = { Text("Класс") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    kcal[child.id]?.let { (eaten, target) ->
-                        val percent = if (target > 0) (eaten * 100 / target).coerceIn(0, 100) else 0
-                        Text("Калории сегодня: $eaten из $target ккал", fontSize = 12.sp, color = PMuted)
-                        LinearProgressIndicator(
-                            progress = { percent / 100f },
-                            modifier = Modifier.fillMaxWidth().height(6.dp),
-                            color = if (eaten > target) PRed else PAccent,
-                            trackColor = Color(0xFF1F2A37),
+
+    policyChild?.let { child ->
+        PolicyDialog(
+            childId = child.id,
+            childName = child.nickname ?: child.name,
+            limitMinutes = child.limitMinutes,
+            bedtimeStart = "21:00",
+            bedtimeEnd = "07:00",
+            api = api,
+            onDismiss = { policyChild = null },
+            onSaved = { policyChild = null; onRefresh() },
+        )
+    }
+
+    if (sitesOpen) {
+        SitesRulesDialog(api = api, onDismiss = { sitesOpen = false })
+    }
+
+    normChild?.let { child ->
+        AlertDialog(
+            onDismissRequest = { normChild = null },
+            title = { Text("Норма калорий") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        normValue,
+                        { normValue = it.filter { ch -> ch.isDigit() }.take(4) },
+                        label = { Text("ккал в день") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("Для ребёнка ${child.nickname ?: child.name}", fontSize = 11.sp, color = PMuted)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val value = normValue.toIntOrNull() ?: 0
+                        normChild = null
+                        if (value >= 400) {
+                            onSaveKcal(child.id, value)
+                            scope.launch { reloadFacts() }
+                        }
+                    },
+                ) { Text("Сохранить") }
+            },
+            dismissButton = { TextButton(onClick = { normChild = null }) { Text("Отмена") } },
+        )
+    }
+
+    val opened = profileChild?.let { picked -> children.firstOrNull { it.id == picked.id } ?: picked }
+    if (opened != null) {
+        ChildProfileScreen(
+            child = opened,
+            nutrition = nutrition[opened.id] ?: ChildNutrition(target = opened.kcalTarget),
+            blockedCount = blocked,
+            onBack = { profileChild = null },
+            onLimit = { policyChild = opened },
+            onSites = { sitesOpen = true },
+            onNorm = {
+                normValue = (nutrition[opened.id]?.target ?: opened.kcalTarget).toString()
+                normChild = opened
+            },
+            onNightMode = { on ->
+                scope.launch {
+                    runCatching {
+                        api().patch(
+                            "/api/guard/children/${opened.id}/policy",
+                            JSONObject()
+                                .put("bedtimeStart", if (on) "21:00" else "00:00")
+                                .put("bedtimeEnd", if (on) "07:00" else "00:00"),
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { onSave(child.id, nickname, school, grade) }, enabled = !busy) {
-                            Text("Сохранить")
-                        }
-                        TextButton(onClick = { policyChild = child }) { Text("Лимит") }
-                    }
-                    OutlinedButton(onClick = { pairChild = child }, modifier = Modifier.fillMaxWidth()) {
-                        Text("📷 Подключить телефон ребёнка")
-                    }
+                    onRefresh()
                 }
-            }
-        }
+            },
+            onConnect = { pairChild = opened },
+            onDelete = { onDelete(opened.id); profileChild = null },
+            onEvents = { profileChild = null; onOpenEvents() },
+            onSaveProfile = { nickname, school, grade -> onSave(opened.id, nickname, school, grade) },
+        )
+        return
     }
+
+    ChildrenTab(
+        children = children,
+        nutrition = nutrition,
+        blockedCount = blocked,
+        busy = busy,
+        onOpen = { profileChild = it },
+        onLimit = { policyChild = it },
+        onCreate = { name ->
+            scope.launch {
+                runCatching { api().post("/api/guard/children", JSONObject().put("name", name)) }
+                    .onFailure { error = it.message }
+                onRefresh()
+            }
+        },
+    )
 }
 
 /** Zen Money: статус, подключение, синхронизация, отключение. */

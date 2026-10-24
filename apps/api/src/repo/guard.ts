@@ -388,14 +388,15 @@ export function getChildProfile(db: DB, childId: string): ChildProfileRow | unde
 export function updateChildProfile(
   db: DB,
   childId: string,
-  patch: { nickname?: string | null; school?: string | null; grade?: string | null },
+  patch: { nickname?: string | null; school?: string | null; grade?: string | null; kcalTarget?: number },
 ): ChildProfileRow | undefined {
   const current = getChildProfile(db, childId);
   if (!current) return undefined;
-  db.prepare("UPDATE children SET nickname = ?, school = ?, grade = ? WHERE id = ?").run(
+  db.prepare("UPDATE children SET nickname = ?, school = ?, grade = ?, kcal_target = ? WHERE id = ?").run(
     patch.nickname ?? current.nickname,
     patch.school ?? current.school,
     patch.grade ?? current.grade,
+    patch.kcalTarget ?? (current as unknown as { kcal_target?: number }).kcal_target ?? 2000,
     childId,
   );
   return getChildProfile(db, childId);
@@ -443,7 +444,62 @@ export function guardOverview(db: DB): GuardOverview {
       pendingRequests: listExtensionRequests(db, "pending").filter((r) => r.child_id === child.id),
       lastEvent: listEvents(db, child.id, 1)[0] ?? null,
       geofences: listGeofences(db, child.id),
+      avatarPath: (child as unknown as { avatar_path?: string | null }).avatar_path ?? null,
+      nickname: (child as unknown as { nickname?: string | null }).nickname ?? null,
+      school: (child as unknown as { school?: string | null }).school ?? null,
+      grade: (child as unknown as { grade?: string | null }).grade ?? null,
+      kcalTarget: (child as unknown as { kcal_target?: number }).kcal_target ?? 2000,
+      online: deviceOnline(db, child.id),
+      lastSeenAt: lastSeen(db, child.id),
+      place: currentPlace(db, child.id),
+      appsCount: countApps(db, child.id),
     };
   });
   return { date, children };
+}
+
+
+/** Устройство считается на связи, если писало серверу последние 10 минут. */
+function deviceOnline(db: DB, childId: string): boolean {
+  const row = db
+    .prepare("SELECT MAX(last_seen_at) AS seen FROM devices WHERE child_id = ?")
+    .get(childId) as { seen: string | null } | undefined;
+  if (!row?.seen) return false;
+  const seen = Date.parse(row.seen.replace(" ", "T") + "Z");
+  if (Number.isNaN(seen)) return false;
+  return Date.now() - seen < 10 * 60_000;
+}
+
+function lastSeen(db: DB, childId: string): string | null {
+  const row = db
+    .prepare("SELECT MAX(last_seen_at) AS seen FROM devices WHERE child_id = ?")
+    .get(childId) as { seen: string | null } | undefined;
+  return row?.seen ?? null;
+}
+
+/** Где сейчас ребёнок: название геозоны, внутри которой он находится. */
+function currentPlace(db: DB, childId: string): string | null {
+  const fences = listGeofences(db, childId);
+  for (const fence of fences) {
+    const state = db
+      .prepare("SELECT inside FROM geofence_state WHERE geofence_id = ?")
+      .get(fence.id) as { inside: number } | undefined;
+    if (state?.inside) return fence.label;
+  }
+  return null;
+}
+
+function countApps(db: DB, childId: string): number {
+  const row = db.prepare("SELECT COUNT(*) AS n FROM app_rules WHERE child_id = ?").get(childId) as
+    | { n: number }
+    | undefined;
+  return row?.n ?? 0;
+}
+
+/** Удаление профиля ребёнка вместе с устройствами, заданиями и событиями. */
+export function deleteChild(db: DB, childId: string): boolean {
+  const row = db.prepare("SELECT id FROM children WHERE id = ?").get(childId);
+  if (!row) return false;
+  db.prepare("DELETE FROM children WHERE id = ?").run(childId);
+  return true;
 }

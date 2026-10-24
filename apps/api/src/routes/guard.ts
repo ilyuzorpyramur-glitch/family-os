@@ -23,6 +23,7 @@ import {
   createExtensionRequest,
   decideExtensionRequest,
   effectiveLimit,
+  deleteChild,
   ensurePolicy,
   findDeviceByToken,
   getChild,
@@ -89,6 +90,14 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
       return reply.code(400).send({ ok: false, error: { code: "VALIDATION", message: body.error.issues[0]?.message } });
     }
     return { ok: true, data: updatePolicy(db, id, body.data) };
+  });
+
+  app.delete("/api/guard/children/:id", { preHandler: parentGuard }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!deleteChild(db, id)) {
+      return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Ребёнок не найден" } });
+    }
+    return { ok: true, data: { deleted: true } };
   });
 
   app.post("/api/guard/children/:id/devices", { preHandler: parentGuard }, async (request, reply) => {
@@ -228,6 +237,7 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
         school: z.string().max(120).nullable().optional(),
         grade: z.string().max(40).nullable().optional(),
         birthDate: z.string().nullable().optional(),
+        kcalTarget: z.number().int().min(400).max(6000).optional(),
       })
       .safeParse(request.body);
     if (!body.success) {
@@ -237,6 +247,7 @@ export function registerGuardApi(app: FastifyInstance, ctx: Ctx): void {
       nickname: body.data.nickname,
       school: body.data.school,
       grade: body.data.grade,
+      kcalTarget: body.data.kcalTarget,
     });
     if (!child) return reply.code(404).send({ ok: false, error: { code: "NOT_FOUND", message: "Ребёнок не найден" } });
     if (body.data.birthDate !== undefined) {

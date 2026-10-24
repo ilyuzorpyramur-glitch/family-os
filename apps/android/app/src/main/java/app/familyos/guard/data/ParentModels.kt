@@ -105,7 +105,14 @@ data class ChildCard(
     val remainingMinutes: Int,
     val pendingRequests: Int,
     val avatarUrl: String?,
+    val online: Boolean = false,
+    val place: String? = null,
+    val lastSeenAt: String? = null,
+    val kcalTarget: Int = 2000,
+    val appsCount: Int = 0,
 ) {
+    val initial: String get() = (nickname ?: name).trim().take(1).uppercase().ifBlank { "?" }
+
     companion object {
         fun listFromOverview(root: JSONObject, publicUrl: String): List<ChildCard> {
             val data = root.optJSONObject("data") ?: return emptyList()
@@ -124,7 +131,13 @@ data class ChildCard(
                     limitMinutes = c.optInt("limitMinutes", policy?.optInt("screen_limit_min") ?: 120),
                     remainingMinutes = c.optInt("remainingMinutes", 0),
                     pendingRequests = requests?.length() ?: 0,
-                    avatarUrl = if (c.isNull("avatar_path")) null else "${publicUrl.trimEnd('/')}/uploads/" + c.optString("avatar_path"),
+                    avatarUrl = if (c.isNull("avatar_path") || c.optString("avatar_path").isBlank()) null
+                    else "${publicUrl.trimEnd('/')}/uploads/" + c.optString("avatar_path"),
+                    online = c.optBoolean("online", false),
+                    place = if (c.isNull("place")) null else c.optString("place").ifBlank { null },
+                    lastSeenAt = if (c.isNull("lastSeenAt")) null else c.optString("lastSeenAt").ifBlank { null },
+                    kcalTarget = c.optInt("kcalTarget", 2000),
+                    appsCount = c.optInt("appsCount", 0),
                 )
             }
         }
