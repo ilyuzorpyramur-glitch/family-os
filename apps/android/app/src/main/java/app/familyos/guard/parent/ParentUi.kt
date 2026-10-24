@@ -298,6 +298,7 @@ private fun BigMetric(value: String, label: String, modifier: Modifier = Modifie
     }
 }
 
+@Composable
 private fun PTab(label: String, selected: Boolean, onClick: () -> Unit) {
     Column(
         Modifier.clip(RoundedCornerShape(12.dp)).clickable { onClick() }.padding(horizontal = 8.dp, vertical = 6.dp),
