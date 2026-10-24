@@ -16,6 +16,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -276,11 +282,11 @@ fun ParentApp(
             Modifier.fillMaxWidth().background(Color(0xFF0E141C)).padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            PTab("Обзор", androidx.compose.material.icons.Icons.Filled.Home, tab == 1) { tab = 1 }
-            PTab("Деньги", androidx.compose.material.icons.Icons.Filled.ShoppingCart, tab == 2) { tab = 2 }
-            PTab("События", androidx.compose.material.icons.Icons.Filled.DateRange, tab == 3) { tab = 3 }
-            PTab("Склад", androidx.compose.material.icons.Icons.Filled.List, tab == 4) { tab = 4 }
-            PTab("Дети", androidx.compose.material.icons.Icons.Filled.Person, tab == 0) { tab = 0 }
+            PTab("Обзор", Icons.Filled.Home, tab == 1) { tab = 1 }
+            PTab("Деньги", Icons.Filled.ShoppingCart, tab == 2) { tab = 2 }
+            PTab("События", Icons.Filled.DateRange, tab == 3) { tab = 3 }
+            PTab("Склад", Icons.Filled.List, tab == 4) { tab = 4 }
+            PTab("Дети", Icons.Filled.Person, tab == 0) { tab = 0 }
         }
     }
 }
