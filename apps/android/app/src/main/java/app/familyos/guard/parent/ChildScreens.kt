@@ -395,7 +395,7 @@ fun ChildProfileScreen(
     onEvents: () -> Unit,
     onSaveProfile: (String, String, String) -> Unit,
 ) {
-    var nightMode by remember(child.id) { mutableStateOf(true) }
+    var nightMode by remember(child.id, child.bedtimeStart) { mutableStateOf(child.nightModeOn) }
     var confirmingDelete by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
 
@@ -562,7 +562,7 @@ fun ChildProfileScreen(
                 emoji = "🌙",
                 emojiBg = Color(0xFF221A3A),
                 title = "Расписание",
-                value = "8:00 – 21:00",
+                value = if (child.nightModeOn) "${child.bedtimeStart} – ${child.bedtimeEnd}" else "не задано",
                 onClick = onLimit,
             )
             Divider()

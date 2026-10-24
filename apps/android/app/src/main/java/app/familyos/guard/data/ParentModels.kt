@@ -110,7 +110,11 @@ data class ChildCard(
     val lastSeenAt: String? = null,
     val kcalTarget: Int = 2000,
     val appsCount: Int = 0,
+    val bedtimeStart: String = "21:00",
+    val bedtimeEnd: String = "07:00",
 ) {
+    val nightModeOn: Boolean get() = bedtimeStart != bedtimeEnd
+
     val initial: String get() = (nickname ?: name).trim().take(1).uppercase().ifBlank { "?" }
 
     companion object {
@@ -138,6 +142,8 @@ data class ChildCard(
                     lastSeenAt = if (c.isNull("lastSeenAt")) null else c.optString("lastSeenAt").ifBlank { null },
                     kcalTarget = c.optInt("kcalTarget", 2000),
                     appsCount = c.optInt("appsCount", 0),
+                    bedtimeStart = c.optString("bedtimeStart", "21:00"),
+                    bedtimeEnd = c.optString("bedtimeEnd", "07:00"),
                 )
             }
         }

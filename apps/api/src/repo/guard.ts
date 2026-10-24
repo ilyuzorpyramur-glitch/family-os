@@ -453,6 +453,8 @@ export function guardOverview(db: DB): GuardOverview {
       lastSeenAt: lastSeen(db, child.id),
       place: currentPlace(db, child.id),
       appsCount: countApps(db, child.id),
+      bedtimeStart: policy.bedtime_start,
+      bedtimeEnd: policy.bedtime_end,
     };
   });
   return { date, children };
